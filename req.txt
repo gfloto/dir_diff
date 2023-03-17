@@ -1,0 +1,15 @@
+torch
+torchvision
+numpy
+albumentations
+opencv-python
+pudb
+imageio
+imageio-ffmpeg
+pytorch-lightning
+omegaconf
+test-tube
+streamlit
+einops
+more-itertools
+transformers
