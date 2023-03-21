@@ -111,10 +111,6 @@ if __name__ == '__main__':
             if i % 10 == 0:
                 save_vis(x, x_out, path='results')
 
-
-
-
-
             step -= 1
 
 
