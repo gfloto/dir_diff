@@ -1,7 +1,9 @@
 import os, sys, yaml
 import torch
 import numpy as np
+from tqdm import tqdm
 from PIL import Image
+import matplotlib.pyplot as plt
 
 import torch.utils.data as data
 from torchvision import transforms
@@ -10,7 +12,7 @@ from torch.utils.data import Dataset
 from taming.models.vqgan import VQModel
 from taming.modules.losses.vqperceptual import VQLPIPSWithDiscriminator
 
-from plotting import save_vis
+from plotting import save_vis, plot_loss
 
 # return dataset to main train and test framework
 def celeba_dataset(batch_size, num_workers=4, size=64):
@@ -72,7 +74,11 @@ if __name__ == '__main__':
     # make model, feel shame for your small neural networks    
     model = VQModel(ddconfig, lossconfig, n_embed, embed_dim).to(device)
     print(f'parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}')
-    
+
+    # load pretrained model
+    start = 66
+    model.load_state_dict(torch.load(f'results/model_{start}.pt'))
+
     # get loss function
     loss_fn = VQLPIPSWithDiscriminator(disc_start=disc_start).to(device)
     print(f'parameters: {sum(p.numel() for p in loss_fn.parameters() if p.requires_grad)}')
@@ -82,35 +88,34 @@ if __name__ == '__main__':
     opt_1 = torch.optim.Adam(loss_fn.parameters(), lr=1e-10)
 
     # make dataloader
-    celeba_loader = celeba_dataset(batch_size=32, num_workers=4, size=64)
+    celeba_loader = celeba_dataset(batch_size=64, num_workers=4, size=64)
 
     # train
     step = disc_start
-    while True:
-        for i, (x, y) in enumerate(celeba_loader):
+    loss = []
+    for epoch in range(start+1, 500):
+        sub_loss = []
+        for i, (x, y) in enumerate(tqdm(celeba_loader)):
             opt_0.zero_grad()
             opt_1.zero_grad()
 
             x = x.to(device)
             x_out, book_loss, lat = model(x)
 
-            if i % 10 == 0:
-                loss_0, _ = loss_fn(book_loss, x, x_out, 0, step, last_layer=x_out)
-
-                loss_0.backward()
-                opt_0.step()
-                print(f'loss_0: {loss_0:.5f}')
-            else:
-                loss_1, _ = loss_fn(book_loss, x, x_out, 1, step, last_layer=x_out)
-
-                loss_1.backward()
-                opt_1.step()
-                print(f'loss_1: {loss_1:.5f}')
+            loss_0, _ = loss_fn(book_loss, x, x_out, 0, step, last_layer=x_out)
+            loss_0.backward()
+            opt_0.step()
             
-            # save images every 10 steps
-            if i % 10 == 0:
-                save_vis(x, x_out, path='results')
+            sub_loss.append(loss_0.item())
 
-            step -= 1
+            #loss_1, _ = loss_fn(book_loss, x, x_out, 1, step, last_layer=x_out)
+            #loss_1.backward()
+            #opt_1.step()
+        
+        loss.append(np.mean(sub_loss))
 
-
+        # save information    
+        save_vis(x, x_out, epoch, path='results')
+        plot_loss(loss, path='results')
+        torch.save(model.state_dict(), f'./results/model_{epoch}.pt')
+        #step -= 1
