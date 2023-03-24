@@ -4,9 +4,11 @@ import yaml
 import torch
 from tqdm import tqdm
 
-from basic import celeba_dataset
 from taming.models.vqgan import VQModel
 from taming.modules.losses.vqperceptual import VQLPIPSWithDiscriminator
+
+from utils import get_model
+from dataloaders import celeba_dataset
 
 # arguments
 def get_args():
@@ -26,18 +28,9 @@ if __name__ == '__main__':
 
     # load yaml file
     yaml_path = 'configs/custom_vqgan.yaml'
-    with open(yaml_path) as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
-    ddconfig = config['model']['params']['ddconfig']
-    lossconfig = config['model']['params']['lossconfig']
-    n_embed = config['model']['params']['n_embed']
-    embed_dim = config['model']['params']['embed_dim']
-    disc_start = config['model']['params']['lossconfig']['params']['disc_start']
-    print(f'embed dim: {embed_dim}\t num embed: {n_embed}')
-
-    # make model    
-    model = VQModel(ddconfig, lossconfig, n_embed, embed_dim).to(device)
+    model = get_model(yaml_path)
     model.load_state_dict(torch.load(args.model_path))
+    model.to(device)
 
     # dataloder
     celeba_loader = celeba_dataset(args.batch_size)
@@ -53,8 +46,8 @@ if __name__ == '__main__':
             out, enc_loss, z, codes = model(img)
 
             # save codes for dir diff
-            if all_codes is None: all_codes = codes
-            else: all_codes = torch.cat((all_codes, codes), dim=0)
+            if all_codes is None: all_codes = codes[None, ...]
+            else: all_codes = torch.cat((all_codes, codes[None, ...]), dim=0)
 
     # save codes
     torch.save(all_codes, 'data/codes.pt')
