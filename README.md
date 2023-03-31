@@ -41,3 +41,23 @@ $dx = [f(x,t) - g(t)^2\nabla_x\textrm{log }p_t(x)]dt + g(t)dw'$
 ($w'$ is the Wiener process flowing back in time)
 
 If we take a look at this paper on [dirichlet diffusion](https://arxiv.org/pdf/1303.0217.pdf)
+
+## UNet - Default
+Inputs 
+* $x\in\mathbb{R}^{h\times w\times c}, t \in \mathbb{R}$
+* $x\in\mathbb{Z}^{h\times w\times c}, t \in \mathbb{R}$
+
+Problem: $t$ is too tiny
+* $t' = \phi(t)$
+* attention throughout U-net $t$
+* cross-attention for patches of $x$
+* eg. $x\in\mathbb{R}^{h'\times w'\times c'} \rarr x\in\mathbb{R}^{hwc}$
+* $h'\ll h$
+
+$x\in\mathbb{R}^{k\times h\times w\times c}$
+
+TODO: how is the attention working (ie. input size etc)? 
+
+## Ideas:
+1. (b k h w c -> b h w (c k)) then do 2D convolution (stacks)
+2. stack conv (ie shrink) then attention
