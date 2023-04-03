@@ -88,3 +88,7 @@ $f_i(\bm{X}) = \frac{\sigma_i}{2}[\gamma_i X_N - (1 - \gamma_i)X_i]$
 $D_{ij}(\bm{X}) = \kappa_i X_i X_N$ when $i=j$, else $0$  
 The coefficients must satisfy: $\sigma_i > 0, \kappa_i > 0, 0< \gamma_i < 1$  
 Remember that: $X_N = 1 - \sum_i^{N-1} X_i$
+
+Furthermore, the stationary distribution has the following parameters:  
+$\alpha_i = \frac{\sigma_i}{\kappa_i}\gamma_i$ where $\alpha = 1, \cdots, N-1$  
+$\alpha_N = \frac{\sigma_i}{\kappa_i}(1 - \gamma_i)$ for $i = 1, \cdots, N-1$
