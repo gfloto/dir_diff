@@ -61,3 +61,30 @@ TODO: how is the attention working (ie. input size etc)?
 ## Ideas:
 1. (b k h w c -> b h w (c k)) then do 2D convolution (stacks)
 2. stack conv (ie shrink) then attention
+
+# Dirichlet Diffusion
+We would like a diffusion process with the dirichlet as the stationary distribution  
+$\mathcal{D}(\bm{x}, \bm{\alpha}) = \frac{1}{B(\bm{\alpha})} \prod_{i=1}^{N} x_i^{\alpha_i -1}$
+
+The Ito diffusion process can be written as:  
+$dX_i(t) = f_i(\bm{X})dt + \sigma_{ij}(\bm{X})dW_j(t)$  
+where  
+$i,j = 1, \cdots, N-1$  
+$X_N = 1 - \sum_i^{N-1} X_i$
+
+Alternatively we can write this is the notation of the Fokker-Planck equation, which governs the joint probability $P(\bm{X}, t)$  
+$\frac{\partial}{\partial t}P(\bm{X}, t) = -\frac{\partial}{\partial X_i}[f_i(\bm{X}) P(\bm{X}, t)] + \frac{1}{2}\frac{\partial^2}{\partial X_i X_j}[D_{ij}P(\bm{X}, t)]$  
+where $D_{ij} = \sigma_{ik}\sigma_{kj}$ and summation is implied over repeated indicies  
+(Note the connection between the deterministic part of this equation and the [continuity equation](https://en.wikipedia.org/wiki/Continuity_equation))
+
+We would now like to specify the functional forms of $f_i(\bm{X})$ and $\sigma_{ij}(\bm{X})$ s.t. the stationary solution of our Fokker-Planck equation remains Dirichlet distributed. One potential solution will exist is the following is satisfied (some general sde type condition):  
+$\frac{\partial}{\partial X_j}\textrm{log }P(\bm{X},t) = D^{-1}_{ij}(2f_i - \frac{\partial}{\partial X_k}D_{ik}) := \frac{\partial}{\partial X_j}\phi$  
+
+Note that $\phi$ can be written as:  
+$\phi(\bm{X}) = -\sum_{i=1}^{N}(\alpha_i - 1)\textrm{log }X_i$
+
+Skipping the proofs, we can write the desired drift and diffuion terms as:  
+$f_i(\bm{X}) = \frac{\sigma_i}{2}[\gamma_i X_N - (1 - \gamma_i)X_i]$  
+$D_{ij}(\bm{X}) = \kappa_i X_i X_N$ when $i=j$, else $0$  
+The coefficients must satisfy: $\sigma_i > 0, \kappa_i > 0, 0< \gamma_i < 1$  
+Remember that: $X_N = 1 - \sum_i^{N-1} X_i$
