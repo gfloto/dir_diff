@@ -13,12 +13,13 @@ from dataloaders import celeba_dataset
 # arguments
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_path', type=str, default='results/model_109.pt')
+    parser.add_argument('--model_path', type=str, default='results/second/model_121.pt')
     parser.add_argument('--batch_size', type=int, default=1028)
 
     args = parser.parse_args()
     return args
 
+# get all codes from celeba dataset
 if __name__ == '__main__':
     args = get_args()
     assert args.model_path is not None
