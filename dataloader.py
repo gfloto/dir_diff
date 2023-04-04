@@ -1,11 +1,32 @@
 import os, sys
 import torch 
 import torch.utils.data as data
+import torchvision
 from torchvision import transforms
+from torch.nn.functional import one_hot
 from torch.utils.data import Dataset
+from einops import rearrange
 
 import numpy as np
 from PIL import Image
+
+# convert to onehot encoding with k categories
+class Onehot(object):
+    def __init__(self, k=10):
+        self.k = k
+
+    def __call__(self, x):
+        x *= self.k - 1
+        x = x.type(torch.int64).squeeze() # remove channel dim
+        x = one_hot(x, num_classes=self.k)
+        return rearrange(x, 'h w k -> k h w')
+
+# return mnist dataset
+def mnist_dataset(batch_size, k, root='data/', num_workers=4):
+    gray_transform = transforms.Compose([transforms.ToTensor(), transforms.Grayscale(), Onehot(k)])
+    mnist_set = torchvision.datasets.MNIST(root=root, train=True, download=False, transform=gray_transform)
+    mnist_loader = data.DataLoader(mnist_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    return mnist_loader
 
 # return dataset to main train and test framework
 def celeba_dataset(batch_size, num_workers=4, size=64):
@@ -48,5 +69,3 @@ class CelebaDataset(Dataset):
 
     def __len__(self):
         return 202599
-
-
