@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 def dir_diff(x, dt=0.01):
     sig = 1
-    kap = 1
+    kap = 0.01
     gam = 0.5
 
     # add drift term
