@@ -19,11 +19,16 @@ class Onehot(object):
         x *= self.k - 1
         x = x.type(torch.int64).squeeze() # remove channel dim
         x = one_hot(x, num_classes=self.k)
+        x = x.type(torch.float32)
         return rearrange(x, 'h w k -> k h w')
 
 # return mnist dataset
-def mnist_dataset(batch_size, k, root='data/', num_workers=4):
-    gray_transform = transforms.Compose([transforms.ToTensor(), transforms.Grayscale(), Onehot(k)])
+def mnist_dataset(batch_size, k, root='data/', num_workers=4, size=32):
+    gray_transform = transforms.Compose([
+        transforms.ToTensor(), 
+        transforms.Grayscale(),
+        transforms.Resize((size, size)),
+        Onehot(k)])
     mnist_set = torchvision.datasets.MNIST(root=root, train=True, download=False, transform=gray_transform)
     mnist_loader = data.DataLoader(mnist_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     return mnist_loader
