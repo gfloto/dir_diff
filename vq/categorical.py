@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.distributions as dist
+from labml_nn.diffusion.ddpm.utils import gather
 
 # import the unet model 
 from ..model import Unet
@@ -55,17 +56,15 @@ class CategoricalDiffusionGrayscale(nn.Module):
         y = logits + gumbel_noise
         return torch.nn.functional.softmax(y / tau, dim=-1)
     
-    def simple_loss(self, x0, noise = None):
-        batch_size = x0.shape[0]
-        t = torch.randint(0, self.n_steps, (batch_size,), device=x0.device, dtype=torch.long)
+    
+    def simple_loss(self, x, x0, t):
+        eps_theta = self.reverse(x, t)
         if noise is None:
             noise = torch.randn_like(x0)
-        xt = self.q_sample(x0, t, eps=noise)
-        eps_theta = self.eps_model(xt, t)
         return nn.MSELoss(eps_theta, noise)
     
-    def loss(self, x0, x, t, _lambda, aux_loss = True):
-        neg_vae_lb = self.simple_loss(x0)
+    def loss(self, x, x0, t, _lambda, aux_loss = True):
+        neg_vae_lb = self.simple_loss(x, x0, t)
         aux_loss = -_lambda * torch.log(self.reverse(x, t))
         loss = neg_vae_lb + aux_loss
         if aux_loss == False:
