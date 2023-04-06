@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.distributions as dist
 
 # import the unet model 
-# from unet import UNet
+from ..model import Unet
 
 
 class CategoricalDiffusionGrayscale(nn.Module):
@@ -12,7 +12,7 @@ class CategoricalDiffusionGrayscale(nn.Module):
 
         # U-Net for predicting noise schedule
         # Subject to change 
-        self.unet = UNet(in_channels, out_channels, num_hidden_channels)
+        self.unet = Unet(dim=num_hidden_channels, channels=K)
         
         self.tau = 1.0  # Temperature parameter, adjust as needed
         self.K = K
@@ -54,6 +54,24 @@ class CategoricalDiffusionGrayscale(nn.Module):
         gumbel_noise = -torch.log(-torch.log(torch.rand_like(logits)))
         y = logits + gumbel_noise
         return torch.nn.functional.softmax(y / tau, dim=-1)
+    
+    def simple_loss(self, x0, noise = None):
+        batch_size = x0.shape[0]
+        t = torch.randint(0, self.n_steps, (batch_size,), device=x0.device, dtype=torch.long)
+        if noise is None:
+            noise = torch.randn_like(x0)
+        xt = self.q_sample(x0, t, eps=noise)
+        eps_theta = self.eps_model(xt, t)
+        return nn.MSELoss(eps_theta, noise)
+    
+    def loss(self, x0, x, t, _lambda, aux_loss = True):
+        neg_vae_lb = self.simple_loss(x0)
+        aux_loss = -_lambda * torch.log(self.reverse(x, t))
+        loss = neg_vae_lb + aux_loss
+        if aux_loss == False:
+            loss = neg_vae_lb
+        return loss
+
 
 
 if __name__ == '__main__':
@@ -62,8 +80,8 @@ if __name__ == '__main__':
     K = 10  # Number of lightness values for grayscale images
     num_timesteps = 100  # Number of time steps in the diffusion process
 
-    in_channels = 1  # 1 for grayscale
-    out_channels = 1  # 1 for grayscale
+    in_channels = 1  # 1 for default greyscale
+    out_channels = 1  # 1 for default greyscale
     num_hidden_channels = 64  # Number of hidden channels in the U-Net
 
     beta_values = [0.1] * num_timesteps  # Example beta values for each time step
