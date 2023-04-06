@@ -7,14 +7,17 @@ import torch.distributions as dist
 
 
 class CategoricalDiffusionGrayscale(nn.Module):
-    def __init__(self, in_channels, out_channels, num_hidden_channels, K, num_timesteps, beta_values):
+    def __init__(self, in_channels, out_channels, 
+                 num_hidden_channels, K, num_timesteps, beta_values,
+                 use_gumbel=True, tau=1.0):
         super(CategoricalDiffusionGrayscale, self).__init__()
 
         # U-Net for predicting noise schedule
         # Subject to change 
         self.unet = UNet(in_channels, out_channels, num_hidden_channels)
         
-        self.tau = 1.0  # Temperature parameter, adjust as needed
+        self.use_gumbel = use_gumbel
+        self.tau = tau  # Temperature parameter, adjust as needed
         self.K = K
         self.num_timesteps = num_timesteps
         self.beta_values = beta_values
@@ -34,10 +37,15 @@ class CategoricalDiffusionGrayscale(nn.Module):
         for i in range(t):
             bar_Q_t = bar_Q_t @ self.compute_Q_t(i)
         p = torch.matmul(x0, bar_Q_t)
-    
-        # Gumbel-Softmax reparameterization
-        logits = torch.log(p)
-        x_t = self._gumbel_softmax_sample(logits, self.tau)
+
+        # Sample from the categorical distribution
+        if self.use_gumbel:
+            # Gumbel-Softmax reparameterization
+            logits = torch.log(p)
+            x_t = self._gumbel_softmax_sample(logits, self.tau)
+        else:
+            # Sample directly from the categorical distribution
+            x_t = dist.Categorical(p).sample()
     
         return x_t
 
