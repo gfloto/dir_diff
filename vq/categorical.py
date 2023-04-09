@@ -24,9 +24,8 @@ class CategoricalDiffusionGrayscale(nn.Module):
         self.beta_values = beta_values
         self.ones = torch.ones(K, K)
         self.Q_t = self.compute_Q_t(T)
-        self.Q_bar_t = self.make_Q_bar(T)
-        self.Q_bar_t_m1 = self.make_Q_bar(T-1)
-        
+        self.Q_bar = self.make_Q_bar(T)
+                
     # Compute the Q_t matrix for a given timestep t
     # using the Uniform distribution defined in Appendix A.2.1
     def compute_Q_t(self, t):
@@ -37,15 +36,17 @@ class CategoricalDiffusionGrayscale(nn.Module):
     # Q_bar is q(x_t | x_0) (which is just Q_0 @ Q_1 @ ...)
     # DONE: move this to a tensor of self.Q_bar: shape [T, k, k]
     def make_Q_bar(self, t):
+        result_tensor = torch.empty((t, self.K, self.K))
         bar_Q_t = torch.eye(self.K)
         for i in range(t):
             bar_Q_t = bar_Q_t @ self.compute_Q_t(i)
-        return bar_Q_t
+            result_tensor[i] = bar_Q_t
+        return result_tensor
 
     # DONE: q(x_{t} | x_{t-1}, x_0) =q(x_{t} | x_{t-1}) = Q_t @ x_{t-1}
     # see equation 3
     def make_Q_rev(self, x0, t):
-        x_t_m1 = self.forward_diffusion(x0, self.Q_bar_t_m1)
+        x_t_m1 = self.forward_diffusion(x0, self.Q_bar[t-2]) # self.Q_bar is zero-indexed so x_{t-1} is at index t-2
         q_rev = self.Q_t @ x_t_m1
         return q_rev
 
@@ -58,14 +59,14 @@ class CategoricalDiffusionGrayscale(nn.Module):
     def forward_diffusion(self, x0, Q_bar):
         p = torch.matmul(x0, Q_bar) # ie. probability that you're in state xt given x0
         # Sample directly from the categorical distribution
-        x_t = dist.Categorical(p).sample()
-        return x_t
+        x = dist.Categorical(p).sample()
+        return x
 
     
     # q(x_{t-1}|x_t, x_0)
     def create_q_tm_1(self, x0, t):
         q_rev = self.make_Q_rev(x0, t)
-        return (q_rev @ self.Q_bar_t_m1) / self.Q_bar_t
+        return (q_rev @ self.Q_bar[t-2]) / self.Q_bar[t-1] # self.Q_bar is zero-indexed so x_{t} is at index t-1
 
     def reverse(self, x, t):
         # Run each image through the network for each timestep t in the vector t.
@@ -77,7 +78,7 @@ class CategoricalDiffusionGrayscale(nn.Module):
         # Apply forward diffusion process
         
         # we have this code, but it can be written more clearly
-        xt = self.forward_diffusion(x0, self.Q_bar_t) # use self.Q_bar (apply matrix mult and use basic torch sampler)
+        xt = self.forward_diffusion(x0, self.Q_bar[t-1]) # use self.Q_bar (apply matrix mult and use basic torch sampler)
         
         # we don't have this code...
         # this is used directly in the loss
