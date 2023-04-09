@@ -45,7 +45,7 @@ class CategoricalDiffusionGrayscale(nn.Module):
     # DONE: q(x_{t} | x_{t-1}, x_0) =q(x_{t} | x_{t-1}) = Q_t @ x_{t-1}
     # see equation 3
     def make_Q_rev(self, x0, t):
-        x_t_m1 = self.forward_diffusion(x0, t-1)
+        x_t_m1 = self.forward_diffusion(x0, self.Q_bar_t_m1)
         q_rev = self.Q_t @ x_t_m1
         return q_rev
 
@@ -55,16 +55,12 @@ class CategoricalDiffusionGrayscale(nn.Module):
     # thus, Q_t, and Q_bar_t should be stored in the class and never re-computed
 
     # Add noise to the image x0 using the forward diffusion process
-    def forward_diffusion(self, x0, time):
-        if time == self.T:
-            p = torch.matmul(x0, self.Q_bar_t) # ie. probability that you're in state xt given x0
-            # Sample directly from the categorical distribution
-            x_t = dist.Categorical(p).sample()
-            return x_t
-        elif time == self.T-1:
-            p = torch.matmul(x0, self.Q_bar_t_m1) # ie. probability that you're in state xt given x0
-            x_t_m1 = dist.Categorical(p).sample()
-            return x_t_m1
+    def forward_diffusion(self, x0, Q_bar):
+        p = torch.matmul(x0, Q_bar) # ie. probability that you're in state xt given x0
+        # Sample directly from the categorical distribution
+        x_t = dist.Categorical(p).sample()
+        return x_t
+
     
     # q(x_{t-1}|x_t, x_0)
     def create_q_tm_1(self, x0, t):
@@ -81,7 +77,7 @@ class CategoricalDiffusionGrayscale(nn.Module):
         # Apply forward diffusion process
         
         # we have this code, but it can be written more clearly
-        xt = self.forward_diffusion(x0, t) # use self.Q_bar (apply matrix mult and use basic torch sampler)
+        xt = self.forward_diffusion(x0, self.Q_bar_t) # use self.Q_bar (apply matrix mult and use basic torch sampler)
         
         # we don't have this code...
         # this is used directly in the loss
