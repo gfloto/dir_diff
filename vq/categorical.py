@@ -42,7 +42,7 @@ class CategoricalDiffusionGrayscale(nn.Module):
             bar_Q_t = bar_Q_t @ self.compute_Q_t(i)
         return bar_Q_t
 
-    # DONE: q(x_{t-1} | x_t, x_0) = q(x_{t-1} | x_t) = q(x_t | x_{t-1}) = Q_t @ x_{t-1}
+    # DONE: q(x_{t} | x_{t-1}, x_0) =q(x_{t} | x_{t-1}) = Q_t @ x_{t-1}
     # see equation 3
     def make_Q_rev(self, x0, t):
         x_t_m1 = self.forward_diffusion(x0, t-1)
@@ -66,11 +66,10 @@ class CategoricalDiffusionGrayscale(nn.Module):
             x_t_m1 = dist.Categorical(p).sample()
             return x_t_m1
     
+    # q(x_{t-1}|x_t, x_0)
     def create_q_tm_1(self, x0, t):
         q_rev = self.make_Q_rev(x0, t)
-        q_xt_m1 = self.forward_diffusion(x0, t-1)
-        q_xt_given_x0 = self.forward_diffusion(x0, t)
-        return (q_rev @ q_xt_m1) / q_xt_given_x0
+        return (q_rev @ self.Q_bar_t_m1) / self.Q_bar_t
 
     def reverse(self, x, t):
         # Run each image through the network for each timestep t in the vector t.
@@ -91,41 +90,13 @@ class CategoricalDiffusionGrayscale(nn.Module):
         
         # p_theta(x_{t-1} | x_t, t)
         # this is also a probability distribution
-        out = self.model(xt, t) # this prediction is the sample shape as q_tm1
+        out = self.reverse(xt, t) # this prediction is the sample shape as q_tm1
         
         # now perform the kld divergence (this is the loss)
-        kld = torch.sum( q_tm1 * torch.log(q_tm1/self.reverse(xt, t)))
+        kld = torch.sum( q_tm1 * torch.log(q_tm1/out))
         return kld
         # return kld (this is the loss)
         
-        # #opt = some pytorch optimizer(model.params, learning_rate=lr)
-        
-        # opt.zero_grad()
-        # x = dataloader.givemeabatch()
-        # loss = train(x) # this is the kld you made!
-        
-        # loss.backwards()
-        # opt.step() # this updates your model (ie. learning!)
-    
-    # def _gumbel_softmax_sample(self, logits, tau):
-    #     gumbel_noise = -torch.log(-torch.log(torch.rand_like(logits)))
-    #     y = logits + gumbel_noise
-    #     return torch.nn.functional.softmax(y / tau, dim=-1)
-    
-    
-    # def simple_loss(self, x, x0, t):
-    #     eps_theta = self.reverse(x, t)
-    #     if noise is None:
-    #         noise = torch.randn_like(x0)
-    #     return nn.MSELoss(eps_theta, noise)
-    
-    # def loss(self, x, x0, t, _lambda, aux_loss = True):
-    #     neg_vae_lb = self.simple_loss(x, x0, t)
-    #     aux_loss = -_lambda * torch.log(self.reverse(x, t))
-    #     loss = neg_vae_lb + aux_loss
-    #     if aux_loss == False:
-    #         loss = neg_vae_lb
-    #     return loss
 
 
 
