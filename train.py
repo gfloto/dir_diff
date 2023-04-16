@@ -10,7 +10,7 @@ def is_monotonic(f, x):
 
 # sample time steps s.t. loss uniformly increases w time
 class TimeSampler:
-    def __init__(self, T, N=10, max_size=1000):
+    def __init__(self, T=1, N=10, max_size=1000):
         self.T = T # length of process
         self.N = N # number of bins-1 (f is piecewise linear)
         self.max_size = max_size # max size of data to store for fitting f
@@ -46,7 +46,7 @@ class TimeSampler:
         return t
 
     # fit f to data 
-    def fit(self, order=4):
+    def fit(self, order=6):
         if self.data is None:
             self.f is None or self.edges is None;
             return

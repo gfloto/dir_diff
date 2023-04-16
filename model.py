@@ -157,7 +157,6 @@ class RandomOrLearnedSinusoidalPosEmb(nn.Module):
         return fouriered
 
 # building block modules
-
 class Block(nn.Module):
     def __init__(self, dim, dim_out, groups = 8):
         super().__init__()
@@ -309,7 +308,6 @@ class Unet(nn.Module):
         )
 
         # layers
-
         self.downs = nn.ModuleList([])
         self.ups = nn.ModuleList([])
         num_resolutions = len(in_out)
