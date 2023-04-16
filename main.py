@@ -10,7 +10,7 @@ from dataloader import mnist_dataset
 
 if __name__ == '__main__':
     batch_size = 64
-    k = 10 # number of categories (normally 255 for images)
+    k = 2 # number of categories (normally 255 for images)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'device: {device}')
 
@@ -20,6 +20,7 @@ if __name__ == '__main__':
     # load model
     model = Unet(dim=64, channels=k).to(device)
 
+    # train loop
     for i, (x, y) in enumerate(loader):
         t = torch.rand(1).to(device)
         x = x.to(device)
@@ -29,7 +30,7 @@ if __name__ == '__main__':
         print(f'x_out: {x_out.shape} x: {x.shape}')
 
         # show image
-        #path = 'test.png'
-        #x = save_vis(x, path, k)
-        #break
+        path = 'test.png'
+        x = save_vis(x, path, k)
+        break
     print('done')

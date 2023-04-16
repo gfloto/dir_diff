@@ -10,7 +10,6 @@ n = int(len(files) * 0.8)
 train = files[:n]
 test = files[n:]
 
-
 # make savepath dir
 save_path = 'taming-transformers/custom_data'
 os.makedirs(save_path, exist_ok=True)

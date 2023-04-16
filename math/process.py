@@ -61,6 +61,10 @@ class Reparam:
     def backward(self, x, t):
         return x * (self.score_sig[1,t] - self.score_sig[0,t]) + self.score_sig[0,t]
 
+'''
+Forward process and normalization for smoother nn learning
+'''
+
 if __name__ =='__main__':
     # process hyperparameters
     O = 6

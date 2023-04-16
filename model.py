@@ -21,18 +21,10 @@ from einops.layers.torch import Rearrange
 from PIL import Image
 from tqdm.auto import tqdm
 
-#from ema_pytorch import EMA
-#from accelerate import Accelerator
-#from pytorch_fid.inception import InceptionV3
-#from pytorch_fid.fid_score import calculate_frechet_distance
-#from denoising_diffusion_pytorch.version import __version__
-
 # constants
-
 ModelPrediction =  namedtuple('ModelPrediction', ['pred_noise', 'pred_x_start'])
 
 # helpers functions
-
 def exists(x):
     return x is not None
 

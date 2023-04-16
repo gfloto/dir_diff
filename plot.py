@@ -12,12 +12,12 @@ def onehot2cat(x, k):
 
 # visualize images
 def save_vis(x, path, k, x_out=None, n=8):
-    x = onehot2cat(x, k=10)
+    x = onehot2cat(x, k=k)
     if x_out is not None:
         x_out = onehot2cat(x_out, k=10)
     else:
         x_out = x
-    print(x.shape)
+    print(torch.unique(x_out))
 
     # take first n images
     n = min(n, x.shape[0])
