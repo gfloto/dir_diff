@@ -6,7 +6,7 @@ from tqdm import tqdm
 from utils import ptnp, scale_t
 from plot import save_vis
 
-def train(model, process, loader, time_sampler, optimizer, logger, args):
+def train(model, process, loader, time_sampler, opt, logger, args):
     device = args.device; k = args.k
 
     model.train()
@@ -26,21 +26,24 @@ def train(model, process, loader, time_sampler, optimizer, logger, args):
 
         # loss
         loss = torch.mean((score_out - score)**2, dim=(1,2,))
+        cl = loss.clone()
+        loss = loss.mean()
 
         # store loss and time
-        logger.store_loss(ptnp(loss.log()), ptnp(t))
-        time_sampler.update(ptnp(loss.log()), ptnp(t))
+        logger.store_loss(ptnp(cl.log()), ptnp(t))
+        time_sampler.update(ptnp(cl.log()), ptnp(t))
 
         # backward pass
-        loss = loss.mean()
-        optimizer.zero_grad()
+        opt.zero_grad()
         loss.backward()
-        loss_track.append(ptnp(loss))
+        opt.step()
 
         # plotting
+        loss_track.append(ptnp(loss))
         if i % 25 == 0 and i > 0:
             #time_sampler.fit()
             #time_sampler.plot('time_f.png')
             logger.plot_loss('loss_hist.png')
+            save_vis(x0, 'noise.png', n=8, k=k, x_out=xt)
 
     return np.mean(loss_track)

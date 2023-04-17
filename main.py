@@ -14,7 +14,7 @@ from utils import InfoLogger
 # argparse
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
+    parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
     parser.add_argument('--batch_size', type=int, default=64, help='batch size')
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
     parser.add_argument('--k', type=int, default=2, help='number of categories')

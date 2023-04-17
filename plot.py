@@ -10,12 +10,14 @@ from utils import onehot2cat
 # visualize images
 def save_vis(x, path, k, x_out=None, n=8):
     # convert from onehot to categorical
-    if k is not None:
+    if len(x.shape) == 4:
         x = onehot2cat(x, k=k)
-        if x_out is not None:
-            x_out = onehot2cat(x_out, k=10)
-        # normalize to [0, 1]
         x = x / (k-1)
+    if x_out is None:
+        x_out = torch.zeros_like(x)
+    elif len(x_out.shape) == 4:
+        x_out = onehot2cat(x_out, k=10)
+        x_out = x_out / (k-1)
 
     # take first n images
     n = min(n, x.shape[0])
