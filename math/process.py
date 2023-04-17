@@ -37,6 +37,7 @@ class Reparam:
     # set s.t. the score for +- sigma = += 1 (linear transformation) 
     def __init__(self, O, h, T, sig=1):
         self.score_sig = np.zeros((2, T))
+        self.r = np.zeros(T)
         for i in range(T):
             # get mean and variance
             mu, var = mean_var(O, h, t[i])           
@@ -49,17 +50,21 @@ class Reparam:
             s1 = score(b1, mu, var)
             s2 = score(b2, mu, var)
 
+            self.r[i] = (np.abs(s1) + np.abs(s2)) / 2
+
             # record score at +- sigma
             self.score_sig[0, i] = min(s1, s2)
             self.score_sig[1, i] = max(s1, s2)
     
     # reparam from score to norm
     def forward(self, x, t):
-        return (x - self.score_sig[0,t]) / (self.score_sig[1,t] - self.score_sig[0,t])
+        return x / self.r[t]
+        #return (x - self.score_sig[0,t]) / (self.score_sig[1,t] - self.score_sig[0,t])
     
     # reparam from norm to score
     def backward(self, x, t):
-        return x * (self.score_sig[1,t] - self.score_sig[0,t]) + self.score_sig[0,t]
+        return self.r[t] * x
+        #return x * (self.score_sig[1,t] - self.score_sig[0,t]) + self.score_sig[0,t]
 
 '''
 Forward process and normalization for smoother nn learning

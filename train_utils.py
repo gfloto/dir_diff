@@ -4,19 +4,9 @@ import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 
-from utils import onehot2cat
+from utils import onehot2cat, scale_t
 from plot import save_vis
 from dataloader import mnist_dataset
-
-# score of logit normal distribution (d/dx log pdf)
-def score(x, mu, var):
-    num = logit(x) - 2*var*x - mu + var
-    denom = var*x*(x-1)
-    return num / denom
-
-# pdf of logit normal distribution
-def pdf(x, mu, v):
-    return 1/np.sqrt(2*np.pi*v) * np.exp(-0.5/v * (logit(x) - mu)**2) / (x * (1-x))
 
 '''
 main diffusion process class
@@ -50,6 +40,68 @@ class Process:
 
         return xt
 
+    def s(self, xt, mu, var):
+        num = torch.logit(xt) - 2*var*xt - mu + var
+        denom = var*xt*(xt-1)
+        score = num / denom
+        return score
+
+    # score at xt given x0 and t
+    def score(self, x0, xt, t, norm=True):
+        # convert x0 to either -1 or 1
+        x0 = onehot2cat(x0, k=2) * 2 - 1
+
+        # get mean and variance
+        mu, var = self.mean_var(x0, t)
+        score = self.s(xt, mu, var)
+
+        r = self.score_scale(mu, var, t)
+        return score / r
+
+    # normalize by average score at 1 std. dev.
+    def score_scale(self, mu, var, t):
+            # only need to compute for one value of t
+            mu = mu[0,0,0]; var = var[0,0,0];
+
+            # get values at +- sigma
+            b1 = torch.sigmoid(mu - torch.sqrt(var))
+            b2 = torch.sigmoid(mu + torch.sqrt(var))
+
+            # get score at +- sigma
+            s1 = self.s(b1, mu, var)
+            s2 = self.s(b2, mu, var)
+
+            r = (s1.abs() + s2.abs()) / 2
+            return r
+
+# reparam (s.t. the neural net isn't learning things in -5000 to 100 or something)
+class Reparam:  
+    # set s.t. the score for +- sigma = += 1 (linear transformation) 
+    def __init__(self, O, h, T, sig=1):
+        self.score_sig = np.zeros((2, T))
+        for i in range(T):
+            # get mean and variance
+            mu, var = self.mean_var(O, h, t[i])           
+
+            # get values at +- sigma
+            b1 = torch.sigmoid(mu - sig * np.sqrt(var))
+            b2 = torch.sigmoid(mu + sig * np.sqrt(var))
+
+            # get score at +- sigma
+            s1 = self.score(b1, mu, var)
+            s2 = self.score(b2, mu, var)
+
+            # record score at +- sigma
+            self.score_sig[0, i] = min(s1, s2)
+            self.score_sig[1, i] = max(s1, s2)
+    
+    # reparam from score to norm
+    def forward(self, x, t):
+        return (x - self.score_sig[0,t]) / (self.score_sig[1,t] - self.score_sig[0,t])
+    
+    # reparam from norm to score
+    def backward(self, x, t):
+        return x * (self.score_sig[1,t] - self.score_sig[0,t]) + self.score_sig[0,t]
 
 '''
 time sampler from: https://arxiv.org/abs/2211.15089 
@@ -62,10 +114,12 @@ def is_monotonic(f, x):
 
 # sample time steps s.t. loss uniformly increases w time
 class TimeSampler:
-    def __init__(self, T=1, N=10, max_size=1000):
-        self.T = T # length of process
+    def __init__(self, t_min, t_max, device, N=10, max_size=4096):
+        self.t_min = torch.tensor(t_min)
+        self.t_max = torch.tensor(t_max) # time step range
         self.N = N # number of bins-1 (f is piecewise linear)
         self.max_size = max_size # max size of data to store for fitting f
+        self.device = device
 
         self.data = None # np array of (t, loss) tuples
         self.edges = None # bin edges for inverse cdf
@@ -82,7 +136,9 @@ class TimeSampler:
     def __call__(self):
         # t = f^-1(u) where u ~ U(0, L)
         if self.f is None or self.edges is None:
-            return np.random.rand()
+            u = torch.rand(1)
+            t = scale_t(u, self.t_min, self.t_max).to(self.device)
+            return t 
 
         # sample u, find index of bin u is in
         u = (self.f_(-1) - self.f_(0)) * np.random.rand() + self.f_(0)
@@ -94,29 +150,38 @@ class TimeSampler:
         m = self.f_(loc) - self.f_(loc-1)
         m /= self.edges[loc] - self.edges[loc-1]
         t = (u - self.f_(loc-1)) / m + self.edges[loc-1]
-
-        return t
+        
+        # rescale to proper range
+        t = scale_t(t, self.t_min, self.t_max) 
+        return torch.tensor(t).to(self.device)
 
     # fit f to data 
-    def fit(self, order=6):
+    def fit(self, order=2):
         if self.data is None:
-            self.f is None or self.edges is None;
+            self.f = None; self.edges = None
             return
         else: # sorta data by t to check monotonicity
-            self.data = self.data[self.data[:,0].argsort()]
+            data = self.data[self.data[:,0].argsort()]
 
         # fit polynomial to data f(t) = loss
-        t, loss = self.data[:,0], self.data[:,1]
+        loss, t = data[:,0], data[:,1]
         self.f = np.polyfit(t, loss, order)
 
         # ensure function is monotonic
         if not is_monotonic(self.f, t):
-            self.f is None or self.edges is None;
             print('function is not monotonic')
+            # plot data and function
+            x = np.linspace(self.t_min, self.t_max, 1000)
+            y = np.polyval(self.f, x)
+            plt.plot(x, y)
+            plt.scatter(t, loss)
+            plt.savefig('error.png')
+            plt.close()
+            self.f = None; self.edges = None;
             return
 
         # n-1 evenly spaced bins, spaced s.t. f(t)_i - f(t)_{i-1} is constant 
-        x = np.linspace(0, self.T, 100*self.N)
+        x = np.linspace(self.t_min, self.t_max, 100*self.N)
         y = np.polyval(self.f, x)
 
         # get bin edges
@@ -130,20 +195,22 @@ class TimeSampler:
         self.edges = np.append(self.edges, [x[-1]])
 
     # add new data to sampler 
-    def update(self, t, loss):
+    def update(self, loss, t):
         # add new data
+        t = t * np.ones_like(loss)
         if self.data is None:
-            self.data = np.array([(t, loss)])
+            self.data = np.array([loss, t]).T
         else:
-            self.data = np.append(self.data, [(t, loss)], axis=0)
+            self.data = np.append(self.data, np.array([loss, t]).T, axis=0)
 
         # ensure data is of size max_size
-        if len(self.data) > self.max_size:
-            self.data = self.data[1:]
+        if self.data.shape[0] > self.max_size:
+            a = self.data.shape[0] - self.max_size
+            self.data = self.data[a:]
 
     # plot data and f
     def plot(self, path):
-        if self.data is None: return
+        if self.data is None or self.f is None: return
 
         fig = plt.figure()
         ax = fig.add_subplot(111)

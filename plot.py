@@ -2,8 +2,8 @@ import os, sys
 import torch
 import numpy as np
 from PIL import Image
-import matplotlib.pyplot as plt
 from einops import rearrange
+import matplotlib.pyplot as plt
 
 from utils import onehot2cat
 
@@ -37,6 +37,7 @@ def save_vis(x, path, k, x_out=None, n=8):
     plt.axis('off')
     plt.savefig(path)
     plt.close()
+
 
 # plot loss, use log scale 
 def plot_loss(loss, path):

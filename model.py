@@ -382,4 +382,6 @@ class Unet(nn.Module):
         x = torch.cat((x, r), dim = 1)
 
         x = self.final_res_block(x, t)
-        return self.final_conv(x)
+        x = self.final_conv(x)
+
+        return x
