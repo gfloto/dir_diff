@@ -1,46 +1,49 @@
 import sys, os
 import torch
-from torch.nn.functional import one_hot
-from einops import rearrange
-import matplotlib.pyplot as plt
+import argparse
 
 from plot import save_vis
 from model import Unet
-from train import TimeSampler, Process
+from train import train
+from train_utils import Process, TimeSampler
 from dataloader import mnist_dataset
 
-def train(model, loader, optimizer, device, k):
-    model.train()
-    for i, (x, y) in enumerate(loader):
-        x_0 = x.to(device)
-        t = torch.rand(1).to(device)
+# argparse
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
+    parser.add_argument('--batch_size', type=int, default=64, help='batch size')
+    parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+    parser.add_argument('--k', type=int, default=2, help='number of categories')
+    parser.add_argument('--O', type=int, default=6, help='process origin')
+    parser.add_argument('--h', type=int, default=4, help='process speed')
+    parser.add_argument('--T', type=float, nargs='+', default=[0.1, 1], help='time interval')
+    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
+    args = parser.parse_args()
 
-        # sample x_t
-        x_t = 
+    # asserts
+    assert args.k > 1, 'k must be greater than 1'
+    assert args.O > 0, 'O must be greater than 0'
+    assert args.h > 0, 'h must be greater than 0'
+    assert args.T[0] < args.T[1], 'T[0] must be less than T[1]'
+    assert args.device in ['cuda', 'cpu'], 'device must be cuda or cpu'
 
-        # forward pass
-        x_out = model(x, t)
+    return args
 
-        # show image
-        path = 'test.png'
-        x = save_vis(x, path, k)
-        break
 
 if __name__ == '__main__':
-    lr = 1e-3
-    batch_size = 64
-    k = 2 # number of categories (normally 255 for images)
-    O = 6 # process origin
-    h = 4 # process speed?
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print(f'device: {device}')
+    args = get_args()
+    print(f'device: {args.device}')
 
-    # load dataset
-    loader = mnist_dataset(batch_size, k)
-    model = Unet(dim=64, channels=k).to(device)
-    opt = torch.optim.Adam(model.parameters(), lr=lr)
-    process = Process(O, h)
+    # load dataset, model, optimizer and process
+    loader = mnist_dataset(args.batch_size, args.k)
+    model = Unet(dim=64, channels=args.k).to(args.device)
+    opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+    process = Process(args.O, args.h)
+    time_sampler = TimeSampler()
 
     # train loop
-    while True:
-        train(model, loader, opt, device, k)
+    for epoch in range(args.epochs):
+        train(model, process, loader, time_sampler, opt, args)
+        print('done one loop')
+        sys.exit()

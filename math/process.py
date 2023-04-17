@@ -68,12 +68,12 @@ Forward process and normalization for smoother nn learning
 if __name__ =='__main__':
     # process hyperparameters
     O = 6
-    h = 4
+    h = 8
 
     T = 100
     n = 10000
     # check score throughout process
-    t = np.linspace(0.1, 1, T)
+    t = np.linspace(0.075, 0.7, T)
 
     # make reparam
     reparam = Reparam(O, h, T)
