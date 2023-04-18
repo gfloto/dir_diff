@@ -3,8 +3,7 @@ import torch
 from tqdm import tqdm
 
 from model import Unet
-from plot import save_vis
-from utils import make_gif
+from plot import save_vis, make_gif
 
 '''
 score matching sampling from: https://arxiv.org/abs/2011.13456
@@ -83,10 +82,10 @@ class Sample:
 
             # get score from model
             score = r * model(x[:, None, ...], t).squeeze()
-            t -= dt
 
             # update x
             x += (f + g**2 * score)*dt + 0.025*g*eps 
+            t -= dt
 
             # save sample
             if save_path is not None:

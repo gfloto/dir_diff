@@ -1,11 +1,24 @@
 import os, sys
+import shutil
 import torch
 import numpy as np
+import imageio
 from PIL import Image
 from einops import rearrange
 import matplotlib.pyplot as plt
 
 from utils import onehot2cat
+
+# make gif from images, name is f'path/{}.png' from 0 to n
+def make_gif(path, name, n):
+        print('making gif...')
+        images = []
+        for i in range(n):
+            images.append(imageio.imread(os.path.join(path, f'{i}.png')))
+        imageio.mimsave(f'{name}.gif', images)
+
+        # remove images and folder
+        shutil.rmtree('imgs')
 
 # visualize images
 def save_vis(x, path, k, x_out=None, n=8):

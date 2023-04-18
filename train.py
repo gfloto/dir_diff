@@ -19,8 +19,8 @@ def train(model, process, loader, time_sampler, opt, logger, args):
         xt = process.xt(x0, t)
 
         # get correct score and predicted score
-        score = process.score(x0, xt, t)
         # NOTE: this is only for k=2
+        score = process.score(x0, xt, t)
         score_out = model(xt[:, None, ...], t).squeeze()
 
         # loss

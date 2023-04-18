@@ -18,8 +18,7 @@ class Onehot(object):
     def __call__(self, x):
         x *= self.k-1
         x = torch.round(x).squeeze().type(torch.int64) # remove channel dim
-        x = one_hot(x, num_classes=self.k)
-        x = x.type(torch.float32)
+        x = one_hot(x, num_classes=self.k).type(torch.float32)
         return rearrange(x, 'h w k -> k h w')
 
 # return mnist dataset

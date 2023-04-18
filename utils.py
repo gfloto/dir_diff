@@ -1,13 +1,17 @@
 import sys, os
 import torch
 import numpy as np
-import shutil
-import imageio
+from einops import rearrange
+from torch.nn.functional import one_hot
 import matplotlib.pyplot as plt
 from matplotlib.image import NonUniformImage
 
 def onehot2cat(x, k):
     return torch.argmax(x, dim=1) / (k-1)
+
+def cat2onehot(x, k):
+    x = one_hot(x * (k-1), k).float() 
+    return rearrange(x, 'b h w k -> b k h w')
 
 # useful torch -> numpy
 def ptnp(x):
@@ -16,17 +20,6 @@ def ptnp(x):
 # take t from [0, 1] to [t_min, t_max]
 def scale_t(t, t_min, t_max):
     return t * (t_max - t_min) + t_min
-
-# make gif from images, name is f'path/{}.png' from 0 to n
-def make_gif(path, name, n):
-        print('making gif...')
-        images = []
-        for i in range(n):
-            images.append(imageio.imread(os.path.join(path, f'{i}.png')))
-        imageio.mimsave(f'{name}.gif', images)
-
-        # remove images and folder
-        shutil.rmtree('imgs')
 
 class InfoLogger:
     def __init__(self):
