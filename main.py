@@ -51,7 +51,9 @@ if __name__ == '__main__':
 
     # train loop
     loss_track = []
-    for epoch in range(args.epochs):
+    #for epoch in range(args.epochs):
+    epoch = 0
+    while True:
         logger.clear()
         loss = train(model, process, loader, time_sampler, opt, logger, args)
 
@@ -59,9 +61,12 @@ if __name__ == '__main__':
         print(f'epoch: {epoch}, loss: {loss}')
 
         # save model
-        torch.save(model.state_dict(), f'results/model_{epoch}.pth')
+        if epoch % 50 == 0:
+            torch.save(model.state_dict(), f'results/model_{epoch}.pth')
 
         # plot loss
         plt.plot(loss_track)
         plt.savefig('results/loss.png')
         plt.close()
+
+        epoch += 1

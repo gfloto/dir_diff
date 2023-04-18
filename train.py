@@ -39,10 +39,10 @@ def train(model, process, loader, time_sampler, opt, logger, args):
 
         # plotting
         loss_track.append(ptnp(loss))
-        if i % 25 == 0 and i > 0:
+        #if i % 25 == 0 and i > 0:
             #time_sampler.fit()
             #time_sampler.plot('time_f.png')
-            logger.plot_loss('results/loss_hist.png')
+            #logger.plot_loss('results/loss_hist.png')
             #save_vis(x0, 'results/noise.png', n=8, k=k, x_out=xt)
 
     return np.mean(loss_track)

@@ -63,7 +63,8 @@ class Sample:
         return r
 
     @torch.no_grad()
-    def __call__(self, model, T=1000, save_path='sample.png'):
+    def __call__(self, model, T, save_path='sample.png'):
+        d = 10
         if save_path is not None:
             os.makedirs('imgs', exist_ok=True)
 
@@ -72,6 +73,7 @@ class Sample:
         dt = (self.t_max - self.t_min) / T
         dt = torch.tensor([dt]).to(self.device)
         t = torch.tensor([self.t_max]).to(self.device)
+
         for i in tqdm(range(T)):
             # get info for euler discretization of sde solution
             f = self.f(x)
@@ -84,21 +86,20 @@ class Sample:
             t -= dt
 
             # update x
-            gamma = (f + g**2 * score)*dt + 0.01*g*eps 
-
-            #print(f'x: {x[0,0,0].item():.5f} | gamma: {gamma[0,0,0].item():.5f}')
-            #print(dt)
-
-            x += gamma
-            x = torch.clamp(x, 0, 1)
+            x += (f + g**2 * score)*dt + 0.025*g*eps 
 
             # save sample
-            if save_path is not None and i % 10 == 0:
-                save_vis(x, f'imgs/{int(i/10)}.png', k=None)
+            if save_path is not None:
+                save_vis(x, f'imgs/{int(i/d)}.png', k=None)
+
+        # binarize
+        x = (x > 0.5).float()
+        for i in range(int(T/d), int(T/d)+10):
+            save_vis(x, f'imgs/{i}.png', k=None)
 
         # save gif
         if save_path is not None:
-            make_gif('imgs', save_path, 100)
+            make_gif('imgs', save_path, int(T/d)+10)
 
 # sorts files alpha numerically (natural computer display)
 import re
