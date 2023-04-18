@@ -60,48 +60,19 @@ class Process:
 
     # normalize by average score at 1 std. dev.
     def score_scale(self, mu, var, t):
-            # only need to compute for one value of t
-            mu = mu[0,0,0]; var = var[0,0,0];
+        # only need to compute for one value of t
+        mu = mu[0,0,0]; var = var[0,0,0];
 
-            # get values at +- sigma
-            b1 = torch.sigmoid(mu - torch.sqrt(var))
-            b2 = torch.sigmoid(mu + torch.sqrt(var))
+        # get values at +- sigma
+        b1 = torch.sigmoid(mu - torch.sqrt(var))
+        b2 = torch.sigmoid(mu + torch.sqrt(var))
 
-            # get score at +- sigma
-            s1 = self.s(b1, mu, var)
-            s2 = self.s(b2, mu, var)
+        # get score at +- sigma
+        s1 = self.s(b1, mu, var)
+        s2 = self.s(b2, mu, var)
 
-            r = (s1.abs() + s2.abs()) / 2
-            return r
-
-# reparam (s.t. the neural net isn't learning things in -5000 to 100 or something)
-class Reparam:  
-    # set s.t. the score for +- sigma = += 1 (linear transformation) 
-    def __init__(self, O, h, T, sig=1):
-        self.score_sig = np.zeros((2, T))
-        for i in range(T):
-            # get mean and variance
-            mu, var = self.mean_var(O, h, t[i])           
-
-            # get values at +- sigma
-            b1 = torch.sigmoid(mu - sig * np.sqrt(var))
-            b2 = torch.sigmoid(mu + sig * np.sqrt(var))
-
-            # get score at +- sigma
-            s1 = self.score(b1, mu, var)
-            s2 = self.score(b2, mu, var)
-
-            # record score at +- sigma
-            self.score_sig[0, i] = min(s1, s2)
-            self.score_sig[1, i] = max(s1, s2)
-    
-    # reparam from score to norm
-    def forward(self, x, t):
-        return (x - self.score_sig[0,t]) / (self.score_sig[1,t] - self.score_sig[0,t])
-    
-    # reparam from norm to score
-    def backward(self, x, t):
-        return x * (self.score_sig[1,t] - self.score_sig[0,t]) + self.score_sig[0,t]
+        r = (s1.abs() + s2.abs()) / 2
+        return r
 
 '''
 time sampler from: https://arxiv.org/abs/2211.15089 
@@ -240,8 +211,7 @@ def get_args():
 testing scripts for process and time sampler
 '''
 
-import imageio
-import shutil
+from utils import make_gif
 
 if __name__ == '__main__':
     args = get_args()
@@ -263,6 +233,7 @@ if __name__ == '__main__':
         # get forward process at each t
         print('running forward process...')
         os.makedirs('imgs', exist_ok=True)
+        imgs = []
         for i in range(T[2]):
             xt = process.xt(x0, t[i])
 
@@ -270,14 +241,7 @@ if __name__ == '__main__':
             save_vis(xt, f'imgs/{i}.png', k=None, n=n)
 
         # make gif of forward process
-        print('making gif...')
-        images = []
-        for i in range(T[2]):
-            images.append(imageio.imread(f'imgs/{i}.png'))
-        imageio.mimsave('forward.gif', images)
-
-        # remove images and folder
-        #shutil.rmtree('imgs')
+        make_gif('imgs', 'results/forward.gif', T[2])
 
     elif args.test == 'ts':
         # test time sampler
@@ -295,4 +259,4 @@ if __name__ == '__main__':
         out = ts()
         print(f'fit time: {time.time() - t0:.5f} s')
 
-        ts.plot('ts_sample.png')
+        ts.plot('results/ts_sample.png')

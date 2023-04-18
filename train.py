@@ -12,7 +12,6 @@ def train(model, process, loader, time_sampler, opt, logger, args):
     model.train()
     loss_track = []
     for i, (x0, _) in enumerate(tqdm(loader)):
-        if i >= 100: break
         # get t, x0 xt
         x0 = x0.to(args.device)
         #t = torch.rand(1).to(device)
@@ -43,7 +42,7 @@ def train(model, process, loader, time_sampler, opt, logger, args):
         if i % 25 == 0 and i > 0:
             #time_sampler.fit()
             #time_sampler.plot('time_f.png')
-            logger.plot_loss('loss_hist.png')
-            save_vis(x0, 'noise.png', n=8, k=k, x_out=xt)
+            logger.plot_loss('results/loss_hist.png')
+            #save_vis(x0, 'results/noise.png', n=8, k=k, x_out=xt)
 
     return np.mean(loss_track)

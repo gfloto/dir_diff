@@ -1,6 +1,8 @@
 import sys, os
 import torch
 import numpy as np
+import shutil
+import imageio
 import matplotlib.pyplot as plt
 from matplotlib.image import NonUniformImage
 
@@ -14,6 +16,17 @@ def ptnp(x):
 # take t from [0, 1] to [t_min, t_max]
 def scale_t(t, t_min, t_max):
     return t * (t_max - t_min) + t_min
+
+# make gif from images, name is f'path/{}.png' from 0 to n
+def make_gif(path, name, n):
+        print('making gif...')
+        images = []
+        for i in range(n):
+            images.append(imageio.imread(os.path.join(path, f'{i}.png')))
+        imageio.mimsave(f'{name}.gif', images)
+
+        # remove images and folder
+        shutil.rmtree('imgs')
 
 class InfoLogger:
     def __init__(self):

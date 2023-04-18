@@ -14,7 +14,7 @@ from utils import InfoLogger
 # argparse
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
+    parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
     parser.add_argument('--batch_size', type=int, default=64, help='batch size')
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
     parser.add_argument('--k', type=int, default=2, help='number of categories')
@@ -38,6 +38,8 @@ if __name__ == '__main__':
     args = get_args()
     print(f'device: {args.device}')
 
+    # TODO: save args as json
+
     # load dataset, model, optimizer and process
     loader = mnist_dataset(args.batch_size, args.k)
     # TODO: for now k-1
@@ -56,7 +58,10 @@ if __name__ == '__main__':
         loss_track.append(loss)
         print(f'epoch: {epoch}, loss: {loss}')
 
+        # save model
+        torch.save(model.state_dict(), f'results/model_{epoch}.pth')
+
         # plot loss
         plt.plot(loss_track)
-        plt.savefig('loss.png')
+        plt.savefig('results/loss.png')
         plt.close()
