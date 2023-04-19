@@ -124,7 +124,7 @@ def natural_key(string_):
     return [int(s) if s.isdigit() else s for s in re.split(r'(\d+)', string_)]
 
 if __name__ == '__main__':
-    # get newest model from 'results/model{num}.pt'
+    # get newest model from f'results/model{num}.pt'
     names = [f for f in os.listdir('results/') if 'model' in f]
     names = sorted(names, key=natural_key)
     model = Unet(dim=64, channels=1).to('cuda')
@@ -137,5 +137,3 @@ if __name__ == '__main__':
     # sample from model
     sample = Sample(O=6, h=8, t_min=0.075, t_max=0.7, batch_size=8, device='cuda')
     sample(model, T=1000, save_path='results/sample')
-
-

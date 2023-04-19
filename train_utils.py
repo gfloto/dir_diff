@@ -211,7 +211,7 @@ def get_args():
 testing scripts for process and time sampler
 '''
 
-from utils import make_gif
+from plot import make_gif
 
 if __name__ == '__main__':
     args = get_args()

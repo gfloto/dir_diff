@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 
 from plot import save_vis
 from model import Unet
-from train import train
+from train import train, cat_train
+from cat import CatProcess
 from train_utils import Process, TimeSampler
 from dataloader import mnist_dataset
 from utils import InfoLogger
@@ -15,6 +16,7 @@ from utils import InfoLogger
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
+    parser.add_argument('--proc_name', type=str, default='cat', help='process name')
     parser.add_argument('--batch_size', type=int, default=64, help='batch size')
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
     parser.add_argument('--k', type=int, default=2, help='number of categories')
@@ -30,6 +32,7 @@ def get_args():
     assert args.h > 0, 'h must be greater than 0'
     assert args.T[0] < args.T[1], 'T[0] must be less than T[1]'
     assert args.device in ['cuda', 'cpu'], 'device must be cuda or cpu'
+    assert args.proc_name in ['cat', 'simplex'], 'process name must be cat or simplex'
 
     return args
 
@@ -40,14 +43,22 @@ if __name__ == '__main__':
 
     # TODO: save args as json
 
+    # TODO: for now k-1
     # load dataset, model, optimizer and process
     loader = mnist_dataset(args.batch_size, args.k)
-    # TODO: for now k-1
-    model = Unet(dim=64, channels=args.k-1).to(args.device)
+    ch = args.k if args.proc_name == 'cat' else args.k-1
+    model = Unet(dim=64, channels=ch).to(args.device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
-    process = Process(args.O, args.h, args.device)
-    time_sampler = TimeSampler(*args.T, args.device)
     logger = InfoLogger()
+
+    # get process
+    if args.proc_name == 'cat':
+        T = 1000
+        betas = torch.linspace(1e-4, 0.02, T)
+        process = CatProcess(args.k, T, betas, args.device)
+    elif args.proc_name == 'simplex':
+        process = Process(args.O, args.h, args.device)
+        time_sampler = TimeSampler(*args.T, args.device)
 
     # train loop
     loss_track = []
@@ -55,14 +66,17 @@ if __name__ == '__main__':
     epoch = 0
     while True:
         logger.clear()
-        loss = train(model, process, loader, time_sampler, opt, logger, args)
+        if args.proc_name == 'simplex':
+            loss = train(model, process, loader, time_sampler, opt, logger, args)
+        elif args.proc_name == 'cat':
+            loss = cat_train(model, process, loader, opt, args)
 
         loss_track.append(loss)
         print(f'epoch: {epoch}, loss: {loss}')
 
         # save model
-        if epoch % 50 == 0:
-            torch.save(model.state_dict(), f'results/model_{epoch}.pth')
+        if epoch % 10 == 0:
+            torch.save(model.state_dict(), f'results/model_{args.proc_name}_{epoch}.pth')
 
         # plot loss
         plt.plot(loss_track)
