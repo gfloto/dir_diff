@@ -26,7 +26,7 @@ def make_gif(path, name, n):
         imageio.mimsave(f'{name}.gif', images)
 
         # remove images and folder
-        shutil.rmtree('imgs')
+        # shutil.rmtree('imgs')
 
 class InfoLogger:
     def __init__(self):
@@ -76,3 +76,16 @@ class InfoLogger:
         # save figure
         plt.savefig(path)
         plt.close()
+
+def plot_score_norm(score_vec, t_vec, save_path="t_vs_score_norm.png"):
+        # plot and save t vec vs score vec
+        plt.plot(t_vec, [torch.linalg.vector_norm(score) for score in score_vec])
+        plt.xlabel('t')
+        plt.ylabel('score norm (fronorm)')
+        plt.savefig(save_path)
+
+def plot_score_std(score_vec, t_vec, save_path="t_vs_score_std.png"):
+        plt.plot(t_vec, [torch.std(score) for score in score_vec])
+        plt.xlabel('t')
+        plt.ylabel('score std')
+        plt.savefig(save_path)
