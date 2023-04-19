@@ -31,7 +31,7 @@ class CatProcess:
         self.Q_bar = self.Q_bar(T)
 
     # forward process
-    def forward(self, x0, t):
+    def xt(self, x0, t):
         # sample from q(xt | x0)
         p = mm(self.Q_bar[t], x0)
         xt = sample(p) 
@@ -53,7 +53,7 @@ class CatProcess:
         return Qt_bar
 
     # fill in later
-    def Q_rev(self, x0, xt, t):
+    def q_rev(self, x0, xt, t):
         num =  mm(self.Q(t), xt) * mm(self.Q_bar[t-1], x0)
         denom = torch.einsum('bkhw, bkhw -> bhw', xt, mm(self.Q_bar[t], x0))
         denom = torch.stack(self.k*[denom], dim=1)
@@ -81,13 +81,15 @@ if __name__ == '__main__':
     os.makedirs('imgs', exist_ok=True)
     for t in range(T):
         qbar = process.Q_bar[t]
+        sys.exit()
+
         # apply qbar to x0
-        xt = process.forward(x0, t)
+        xt = process.xt(x0, t)
 
         # save image
         if t % r == 0:
-            save_vis(xt, f'imgs/{int(i/r)}.png', k=None, n=8)
+            save_vis(xt, f'imgs/{int(t/r)}.png', k=None, n=8)
 
     # make gif of forward process
-    make_gif('imgs', 'cat_for.gif', T//r)
+    make_gif('imgs', 'results/cat_for.gif', T//r)
 
