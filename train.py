@@ -56,7 +56,7 @@ def cat_train(model, process, loader, opt, args):
     for i, (x0, _) in enumerate(tqdm(loader)):
         # get t, x0 xt
         x0 = x0.to(args.device)
-        t = torch.randint(0, process.T, (1,)).to(device)
+        t = torch.randint(1, process.T, (1,)).to(device)
         xt = process.xt(x0, t.item())
 
         # get correct score and predicted score
@@ -65,7 +65,16 @@ def cat_train(model, process, loader, opt, args):
         q_rev = process.q_rev(x0, xt, t.item())
 
         # loss
-        loss = kld(log_pred, q_rev, reduction='none').sum(dim=(1,2,3,)).mean() 
+        pred = log_pred.exp()
+        assert q_rev.sum(dim=1).allclose(torch.ones_like(q_rev.sum(dim=1)))
+        assert pred.sum(dim=1).allclose(torch.ones_like(pred.sum(dim=1))) 
+
+        loss = torch.sum(q_rev * (q_rev.log() - log_pred), dim=(1))
+        # print values where loss is negative
+        #if not (loss >= 0).all():
+        #    print(loss[loss < 0])
+        loss = loss.mean()
+        #loss = kld(log_pred, q_rev, reduction='none', log_target=False).sum(dim=(1,2,3,)).mean() 
 
         # backward pass
         opt.zero_grad()

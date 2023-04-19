@@ -46,18 +46,23 @@ class CatProcess:
     # Q_bar is q(x_t | x_0) (which is just Q_1 @ Q_2 @ ...)
     def Q_bar(self, t):
         Qt_bar = torch.zeros((t, self.k, self.k)).to(self.device)
-        Qt_bar[0] = torch.eye(self.k).to(self.device)
-        for i in range(1, t):
+        Qt_bar[0] = self.Q(0)
+        for i in range(1,t):
             Qt = self.Q(i)
             Qt_bar[i] = Qt_bar[i-1] @ Qt
         return Qt_bar
 
     # fill in later
     def q_rev(self, x0, xt, t):
-        num =  mm(self.Q(t), xt) * mm(self.Q_bar[t-1], x0)
+        num =  mm(self.Q(t).T, xt) * mm(self.Q_bar[t-1], x0)
         denom = torch.einsum('bkhw, bkhw -> bhw', xt, mm(self.Q_bar[t], x0))
         denom = torch.stack(self.k*[denom], dim=1)
-        return num / denom
+        out = num / denom
+        if not out.sum(dim=1).allclose(torch.ones_like(out.sum(dim=1))):
+            a = out.sum(dim=1)
+            print(t)
+            print(a[torch.where(a != 1)])
+        return out 
 
 from dataloader import mnist_dataset
 
