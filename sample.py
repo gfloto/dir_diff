@@ -60,9 +60,34 @@ class Sample:
 
         r = (s1.abs() + s2.abs()) / 2
         return r
+    
+    def update_order(self, x, t, dt, order):
+        # get info for euler discretization of sde solution
+        f = self.f(x)
+        g = self.g(x)
+        r = self.score_scale(t).to(self.device)
+        eps = torch.randn(self.batch_size, *self.img_shape).to(self.device) 
+        # get score from model
+        score = r * model(x[:, None, ...], t).squeeze()
+        if order == 1:
+            update = (f + g**2 * score)*dt + 0.025*g*eps 
+        elif order == 2:
+            # runge kuuta 2nd order: ff_{n+1} = f{n} + (k1+k2)/2
+            k1 = dt * (f + g**2 * score) # k1 is same as euler first order
+            x1_temp = x + k1
+            f1 = self.f(x1_temp)
+            g1 = self.g(x1_temp)
+            t1 = t - dt
+            r1 = self.score_scale(t1).to(self.device)
+            score1 = r1 * model(x[:, None, ...], t1).squeeze()
+            k2 = dt * (f1 + g1**2 * score1)
+            update = (k1+k2)/2 + 0.025*g1*eps 
+        return update
+
+            
 
     @torch.no_grad()
-    def __call__(self, model, T, save_path='sample.png'):
+    def __call__(self, model, T, save_path='sample.png', order = 2):
         d = 10
         if save_path is not None:
             os.makedirs('imgs', exist_ok=True)
@@ -74,17 +99,10 @@ class Sample:
         t = torch.tensor([self.t_max]).to(self.device)
 
         for i in tqdm(range(T)):
-            # get info for euler discretization of sde solution
-            f = self.f(x)
-            g = self.g(x)
-            r = self.score_scale(t).to(self.device)
-            eps = torch.randn(self.batch_size, *self.img_shape).to(self.device) 
-
-            # get score from model
-            score = r * model(x[:, None, ...], t).squeeze()
+            update = self.update_order(x, t, dt, order=order)
 
             # update x
-            x += (f + g**2 * score)*dt + 0.025*g*eps 
+            x += update
             t -= dt
 
             # save sample
