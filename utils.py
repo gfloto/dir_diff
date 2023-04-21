@@ -6,6 +6,13 @@ from torch.nn.functional import one_hot
 import matplotlib.pyplot as plt
 from matplotlib.image import NonUniformImage
 
+def save_path(args, path):
+    return os.path.join(args.exp, path)
+
+# logit function with scale a
+def a_logit(x, a):
+    return x.log() - (a-x).log()
+
 def onehot2cat(x, k):
     return torch.argmax(x, dim=1) / (k-1)
 
@@ -16,10 +23,6 @@ def cat2onehot(x, k):
 # useful torch -> numpy
 def ptnp(x):
     return x.detach().cpu().numpy()
-
-# take t from [0, 1] to [t_min, t_max]
-def scale_t(t, t_min, t_max):
-    return t * (t_max - t_min) + t_min
 
 class InfoLogger:
     def __init__(self):
