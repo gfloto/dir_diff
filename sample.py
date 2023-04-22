@@ -1,5 +1,6 @@
 import sys, os
 import torch
+import numpy as np
 from tqdm import tqdm
 
 from utils import a_logit, save_path
@@ -86,9 +87,13 @@ class Sampler:
         dt = torch.tensor([1/T]).to(self.device)
         t = torch.tensor([1.]).to(self.device)
 
+        # noise schedule
+        g_scale = np.linspace(0,1,T)[::-1]
+        g_scale = 0.1*g_scale**2
+
         # sample loop
         for i in tqdm(range(T)):
-            update = self.update_order(model, x, t, dt, order=order)
+            update = self.update_order(model, x, t, dt, order=order, g_scale=g_scale[i])
 
             # update x
             x += update

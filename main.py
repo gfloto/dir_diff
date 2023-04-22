@@ -22,7 +22,7 @@ def get_args():
     parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
     parser.add_argument('--proc_name', type=str, default='simplex', help='process name')
     parser.add_argument('--batch_size', type=int, default=64, help='batch size')
-    parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+    parser.add_argument('--epochs', type=int, default=500, help='number of epochs')
     parser.add_argument('--k', type=int, default=2, help='number of categories')
     parser.add_argument('--O', type=int, default=3, help='process origin')
     parser.add_argument('--h', type=int, default=10, help='process speed')
