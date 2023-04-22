@@ -51,7 +51,7 @@ class Sampler:
         score = num / denom
         return score
     
-    def update_order(self, model, x, t, dt, order=1, g_scale=0.01):
+    def update_order(self, model, x, t, dt, order=1, g_scale=0.02):
         # get info for euler discretization of sde solution
         f = self.f(x)
         g = self.g(x)
@@ -128,4 +128,4 @@ if __name__ == '__main__':
     # print model name
     # sample from model
     sampler = Sampler(args, batch_size=8, device='cuda')
-    sampler(model, T=500, save_path=save_path(args, 'sample'))
+    sampler(model, T=1000, save_path=save_path(args, 'sample'))
