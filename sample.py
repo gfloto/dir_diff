@@ -75,7 +75,7 @@ class Sampler:
             
 
     @torch.no_grad()
-    def __call__(self, model, T, save_path='sample.png', order=2, d=10):
+    def __call__(self, model, T, save_path='sample.png', order=1, d=10):
         if save_path is not None:
             os.makedirs('imgs', exist_ok=True)
 
@@ -128,4 +128,4 @@ if __name__ == '__main__':
     # print model name
     # sample from model
     sampler = Sampler(args, batch_size=8, device='cuda')
-    sampler(model, T=500, save_path=save_path(args, 'sample.png'))
+    sampler(model, T=500, save_path=save_path(args, 'sample'))

@@ -32,7 +32,7 @@ class Process:
         var = 1/(2*self.h) * (1 - torch.exp(-2*self.h*t)) * torch.ones_like(x0).to(x0.device)
         return mu, var
 
-    # sample from logit normal distribution
+    # sample from logit normal distribution: R -> S
     def sample(self, mu, var):
         return self.a * torch.sigmoid(mu + var.sqrt()*torch.randn_like(mu))
 
@@ -48,8 +48,9 @@ class Process:
 
     # compute score at xt given mu and var
     def s(self, xt, mu, var):
-        num = a_logit(xt, self.a) - 2*var*xt - mu + self.a*var
-        denom = var*xt*(xt - self.a)
+        a = self.a
+        num = a*a_logit(xt, a) - 2*var*xt - a*mu + a*var
+        denom = var*xt*(xt - a)
         score = num / denom
         return score
 
@@ -61,7 +62,6 @@ class Process:
         # get mean and variance
         mu, var = self.mean_var(x0, t)
         score = self.s(xt, mu, var)
-
         return score
 
 
