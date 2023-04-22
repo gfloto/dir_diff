@@ -35,3 +35,25 @@ Works that we may want to compare to
 Place graphs here that help visualize the process to guide understanding and debugging.
 
 -   SDE process Desmos plot - [website](https://www.desmos.com/calculator/rjkzmwuny0)
+
+We have previously seen bad performance when it comes to later steps in sampling. In particular, it appears to over transform the images around 75% of the way through sampling (e.g., 750/1000 steps). Consider steps \~650 versus \~800 versus 1000 (sample on top, scores on bottom):
+
+![](docs/class%5Cresults%5Cartifacting%5C62.png)
+
+![](docs/class%5Cresults%5Cartifacting%5C79.png)
+
+![](docs/class%5Cresults%5Cartifacting%5C99.png)
+
+Note that above, the images are from different sampling runs, but the same behaviour is exhibited run to run. A full sample run is as follows:
+
+![](docs/class%5Cresults%5Cartifacting%5Cover_transform.gif)
+
+We can also obtain ok results if we cut off the sampling process part way (around step 700-750):
+
+![](docs/class%5Cresults%5Cartifacting%5Ccut_off_sample.gif)
+
+Interestingly, we also observe that if we sample from out of the training time bounds, i.e, outside of`[t_min, t_max]` we no longer have the same poor sampling behaviour as above. We are unsure of why this is the case.
+
+![](docs/class%5Cresults%5Cout_of_bound_sampling%5C98.png)
+
+![](docs/class%5Cresults%5Cout_of_bound_sampling%5Csample.gif)
