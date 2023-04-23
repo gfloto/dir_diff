@@ -22,7 +22,8 @@ class Process:
 
     # get t, rescale to be in proper interval
     def t(self):
-        tu = torch.rand(1)
+        beta = torch.distributions.beta.Beta(1.6, 2.7)
+        tu = beta.sample().view([1])
         t = (self.t_max - self.t_min) * tu + self.t_min
         return t.to(self.device), tu.to(self.device)
 

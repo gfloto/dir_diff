@@ -22,13 +22,15 @@ class Onehot(object):
         return rearrange(x, 'h w k -> k h w')
 
 # return mnist dataset
-def mnist_dataset(batch_size, k, root='data/', num_workers=4, size=32):
+def mnist_dataset(batch_size, k, root='data/', num_workers=4, size=32, use_full_batch=False):
     gray_transform = transforms.Compose([
         transforms.ToTensor(), 
         transforms.Grayscale(),
         transforms.Resize((size, size), antialias=True),
         Onehot(k)])
-    mnist_set = torchvision.datasets.MNIST(root=root, train=True, download=False, transform=gray_transform)
+    mnist_set = torchvision.datasets.MNIST(root=root, train=True, download=True, transform=gray_transform)
+    if use_full_batch:
+        batch_size = len(mnist_set)
     mnist_loader = data.DataLoader(mnist_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     return mnist_loader
 

@@ -55,6 +55,7 @@ if __name__ == '__main__':
     args.exp = os.path.join('results', args.exp)
     save_args(args)
     print(f'device: {args.device}')
+    print(f"Training args {args}")
 
     # load dataset, model, optimizer and process
     loader = mnist_dataset(args.batch_size, args.k)

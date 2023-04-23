@@ -1,0 +1,13 @@
+{
+  "exp": "results\\beta",
+  "lr": 1e-5,
+  "proc_name": "simplex",
+  "batch_size": 64,
+  "epochs": 1000,
+  "k": 2,
+  "O": 3,
+  "h": 10,
+  "T": [0.08, 0.55],
+  "a": 10,
+  "device": "cuda"
+}
