@@ -28,7 +28,7 @@ def mnist_dataset(batch_size, k, root='data/', num_workers=4, size=32):
         transforms.Grayscale(),
         transforms.Resize((size, size), antialias=True),
         Onehot(k)])
-    mnist_set = torchvision.datasets.MNIST(root=root, train=True, download=False, transform=gray_transform)
+    mnist_set = torchvision.datasets.MNIST(root=root, train=True, download=True, transform=gray_transform)
     mnist_loader = data.DataLoader(mnist_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     return mnist_loader
 
