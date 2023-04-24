@@ -69,42 +69,34 @@ class Process:
 testing scripts for process and time sampler
 '''
 
+from utils import get_args
 from tqdm import tqdm
 from plot import make_gif
 plt.style.use('seaborn-whitegrid')
 
 if __name__ == '__main__':
+    N = 5
     # get device, data and process
-    h = 8; O = 6
-    n = 8; k=2; T = [0.075, 0.7, 100]
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    loader = mnist_dataset(n, k)
-    process = Process(O, h, device)
+    args = get_args()
+    loader = mnist_dataset(8, args.k)
+    process = Process(args)
 
     # test forward process
-    t = torch.linspace(*T).to(device)
+    t = torch.linspace(*args.T, N).to(args.device)
     (x0, _) = next(iter(loader))
-    x0 = x0.to(device)
+    x0 = x0.to(args.device)
 
-    # get forward process at each t
     print('running forward process...')
     os.makedirs('imgs', exist_ok=True)
-    imgs = []; r_track = []
-    for i in tqdm(range(T[2])):
+
+    # get forward process at each t
+    for i in tqdm(range(N)):
+        # generate and save image
         xt = process.xt(x0, t[i])
-        score, r = process.score(x0, xt, t[i], norm=True)
-        r_track.append(r.cpu().detach().numpy())
-
-        # save image
-        #save_vis(xt, f'imgs/{i}.png', k=None, n=n)
-
-    # plot r track
-    plt.plot(np.linspace(*T), r_track)
-    plt.xlabel('Time'); plt.ylabel('Score Magnitude')
-    plt.title('Score Magnitude vs Time')
-    plt.show()
+        imgs = [xt for _ in range(N)]
+        save_vis(imgs, f'imgs/{i}.png', args.a, args.k)
 
     # make gif of forward process
-    make_gif('imgs', 'results/forward.gif', T[2])
+    make_gif('imgs', 'results/forward.gif', N)
 
 
