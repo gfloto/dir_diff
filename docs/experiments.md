@@ -14,14 +14,20 @@ We have previously seen bad performance when it comes to later steps in sampling
 
 Note that above, the images are from different sampling runs, but the same behaviour is exhibited run to run. A full sample run is as follows:
 
-![](results/artifacting/over_transform.gif)
+<p align="center">
+  <img src="results/artifacting/over_transform.gif" />
+</p>
 
 We can also obtain ok results if we cut off the sampling process part way (around step 700-750):
 
-![](results/artifacting/cut_off_sample.gif)
+<p align="center">
+  <img src="results/artifacting/cut_off_sample.gif" />
+</p>
 
 Interestingly, we also observe that if we sample from out of the training time bounds, i.e, outside of`[t_min, t_max]` we no longer have the same poor sampling behaviour as above. We are unsure of why this is the case.
 
 ![](results/out_of_bound_sampling/98.png)
 
-![](results/out_of_bound_sampling/sample.gif)
+<p align="center">
+  <img src="results/out_of_bound_sampling/sample.gif" />
+</p>
