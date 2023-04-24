@@ -4,56 +4,121 @@ A general overview of the project can be found in the report in `docs/report.pdf
 
 The CSC413/2516 class report can be found along with organized results in `docs/class/`
 
-# Important Papers
+# Simplex Diffusion Plan
 
-This section includes relevant papers. Please include anything relevant here.
+## TODO for meeting
+* Only 3 weeks left!
+* Communication channel - (slack?)
 
-## Simplex Diffusion Relevent
 
-Papers that are directly relevant for building a functioning model
+## Baselines
+* Categorical Diffusion: [paper](https://arxiv.org/abs/2107.03006)
+    * [code1](https://github.com/HKUNLP/reparam-discrete-diffusion) | [code2](https://github.com/samb-t/unleashing-transformers)
+* Categorical SDE w Simplex Diffusion: [paper](https://arxiv.org/abs/2210.14784) | No Code
+* Discrete Flows: [paper](https://arxiv.org/abs/1905.10347) | [code?](https://github.com/google/edward2/blob/main/edward2/tensorflow/layers/discrete_flows.py)
+* Analog Bits: [paper](https://arxiv.org/abs/2208.04202) | [code](https://github.com/google-research/pix2seq)
 
--   [Simplex Diffusion](https://arxiv.org/abs/2210.14784)
+#### Viewed, but probably not
+* DiffusER: [paper](https://arxiv.org/abs/2210.16886)
+* Continuous Time Discrete Diffusion: [paper](https://arxiv.org/abs/2205.14987)
+    * TODO: read this!!
 
--   Score based generative models - [website](https://yang-song.net/blog/2021/score/) \| [paper](https://arxiv.org/abs/2011.13456)
+## Experiments
+* CIFAR-10 Image Generation
+    * FID / Inception type scores
+    * Unconditional and Conditional
 
--   DDPM - [paper](https://arxiv.org/abs/2006.11239)
+* Limited-vocab Text Generation
+    * See 4.4 in discrete flow, something like this...
 
-## Comparison Papers
+* RL with Classifier Guidance
+    * [Diffuser](https://arxiv.org/abs/2205.09991) with discrete action and state space
 
-Works that we may want to compare to
+## Simplex Diffusion Progress
+* Code forward process, test mag of score distribution
+* Implimentation after should be easy.
 
--   Categorical diffusion - [paper](https://arxiv.org/abs/2107.03006)
+## Thoughts
+Is there a task where we can show that have points on the simplex is uniquely useful?
 
--   LM diffusion - [paper](https://arxiv.org/abs/2211.15089)
+## Potential?
+semantic segmentation thing we talked about
+that could be nice
 
--   Diffusion Models: A Comprehensive Survey of Methods and Applications - [paper](https://arxiv.org/abs/2209.00796)
+# TODO
+## Image
+* dataloader, neural net etc is done
+* Griffin
 
--   Open source diffusion implementations (contains Gaussian MNIST model) - [website](https://vinija.ai/models/diffusion/)
+## Text
+* nothing done
+* dataloader, transformer model etc
+* model this off our baseline
 
-# Graphs
+* Eric
 
-Place graphs here that help visualize the process to guide understanding and debugging.
 
--   SDE process Desmos plot - [website](https://www.desmos.com/calculator/rjkzmwuny0)
+* also look at 'cat_*.py'
 
-We have previously seen bad performance when it comes to later steps in sampling. In particular, it appears to over transform the images around 75% of the way through sampling (e.g., 750/1000 steps). Consider steps \~650 versus \~800 versus 1000 (sample on top, scores on bottom):
+## Baseline Model
+* ?? maybe cut from other models
+# Simplex Diffusion Plan
 
-![](docs/class%5Cresults%5Cartifacting%5C62.png)
+## TODO for meeting
+* Only 3 weeks left!
+* Communication channel - (slack?)
 
-![](docs/class%5Cresults%5Cartifacting%5C79.png)
 
-![](docs/class%5Cresults%5Cartifacting%5C99.png)
+## Baselines
+* Categorical Diffusion: [paper](https://arxiv.org/abs/2107.03006)
+    * [code1](https://github.com/HKUNLP/reparam-discrete-diffusion) | [code2](https://github.com/samb-t/unleashing-transformers)
+* Categorical SDE w Simplex Diffusion: [paper](https://arxiv.org/abs/2210.14784) | No Code
 
-Note that above, the images are from different sampling runs, but the same behaviour is exhibited run to run. A full sample run is as follows:
+---
 
-![](docs/class%5Cresults%5Cartifacting%5Cover_transform.gif)
+#### Viewed, but probably not
+* Discrete Flows: [paper](https://arxiv.org/abs/1905.10347) | [code?](https://github.com/google/edward2/blob/main/edward2/tensorflow/layers/discrete_flows.py)
+* Analog Bits: [paper](https://arxiv.org/abs/2208.04202) | [code](https://github.com/google-research/pix2seq)
+* DiffusER: [paper](https://arxiv.org/abs/2210.16886)
+* Continuous Time Discrete Diffusion: [paper](https://arxiv.org/abs/2205.14987)
+    * TODO: read this!!
 
-We can also obtain ok results if we cut off the sampling process part way (around step 700-750):
+---
 
-![](docs/class%5Cresults%5Cartifacting%5Ccut_off_sample.gif)
+## Experiments
+* CIFAR-10 Image Generation
+    * FID / Inception type scores
+    * Unconditional and Conditional
 
-Interestingly, we also observe that if we sample from out of the training time bounds, i.e, outside of`[t_min, t_max]` we no longer have the same poor sampling behaviour as above. We are unsure of why this is the case.
+* Limited-vocab Text Generation
+    * See 4.4 in discrete flow, something like this...
 
-![](docs/class%5Cresults%5Cout_of_bound_sampling%5C98.png)
+* RL with Classifier Guidance
+    * [Diffuser](https://arxiv.org/abs/2205.09991) with discrete action and state space
 
-![](docs/class%5Cresults%5Cout_of_bound_sampling%5Csample.gif)
+## Simplex Diffusion Progress
+* Code forward process, test mag of score distribution
+* Implimentation after should be easy.
+
+## Thoughts
+Is there a task where we can show that have points on the simplex is uniquely useful?
+
+## Potential?
+semantic segmentation thing we talked about
+that could be nice
+
+# TODO
+## Simplex Diffusion
+* In both gaussian space and simplex space
+* Griffin and Mihai
+
+## Text
+* nothing done
+* dataloader, transformer model etc
+* model this off our baseline
+* Eric
+
+## Baseline Model
+* ?? maybe cut from other models
+* also look at 'cat_*.py'
+* Thor
