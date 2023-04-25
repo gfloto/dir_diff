@@ -69,10 +69,9 @@ class Process:
 testing scripts for process and time sampler
 '''
 
-from utils import get_args
 from tqdm import tqdm
+from utils import get_args
 from plot import make_gif
-plt.style.use('seaborn-whitegrid')
 
 if __name__ == '__main__':
     N = 5
@@ -93,8 +92,7 @@ if __name__ == '__main__':
     for i in tqdm(range(N)):
         # generate and save image
         xt = process.xt(x0, t[i])
-        imgs = [xt for _ in range(N)]
-        save_vis(imgs, f'imgs/{i}.png', args.a, args.k)
+        save_vis(xt, f'imgs/{i}.png', args.a, args.k)
 
     # make gif of forward process
     make_gif('imgs', 'results/forward.gif', N)

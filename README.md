@@ -4,7 +4,11 @@ A general overview of the project can be found in the report in `docs/report.pdf
 
 The CSC413/2516 class report can be found along with organized results in `docs/class/`
 
-# Simplex Diffusion Plan
+<p align="center">
+  <img src="docs/results/math/pdf.png" />
+</p>
+
+# Plan
 
 ## TODO for meeting
 * Only 3 weeks left!
