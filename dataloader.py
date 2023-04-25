@@ -2,6 +2,7 @@ import os, sys
 import torch 
 import torch.utils.data as data
 import torchvision
+import requests
 from torchvision import transforms
 from torch.nn.functional import one_hot
 from torch.utils.data import Dataset
@@ -73,3 +74,83 @@ class CelebaDataset(Dataset):
 
     def __len__(self):
         return 202599
+
+# custom dataloader for LM1b
+class LM1BDataset(Dataset):
+    def __init__(self):
+        self.data = self.load_data()
+        print('Data loaded.')
+
+    def load_data(self):
+        # check if data exists otherwise make GET request to data URL string
+        # if data exists, load data
+        if not os.path.exists('data/1-billion-word-language-modeling-benchmark-r13output'):
+            if not os.path.exists('data'):
+                os.makedirs('data')
+            print('Downloading data...')
+            url = 'http://www.statmt.org/lm-benchmark/1-billion-word-language-modeling-benchmark-r13output.tar.gz'
+            r = requests.get(url, allow_redirects=True)
+            open('data/1-billion-word-language-modeling-benchmark-r13output.tar.gz', 'wb').write(r.content)
+            print('Download complete.')
+            # unzip data
+            import tarfile
+            with tarfile.open('data/1-billion-word-language-modeling-benchmark-r13output.tar.gz', 'r') as tar_ref:
+                tar_ref.extractall('data')
+        # load data
+        data = []
+        for root, dirs, files in os.walk('data/1-billion-word-language-modeling-benchmark-r13output/training-monolingual.tokenized.shuffled'):
+            for file in files:
+                with open(os.path.join(root, file), 'r') as f:
+                    data.extend(f.readlines())
+        return data
+
+    def __getitem__(self, index):
+        # load textual data
+        text = self.data[index]
+        return text
+
+    def __len__(self):
+        return len(self.data)
+    
+# text8 dataset 
+# data available at "http://mattmahoney.net/dc/text8.zip"
+# based off of https://github.com/undercutspiky/Char_LM_PyTorch/blob/master/dataloader.py
+class Text8Dataset(Dataset):
+    def __init__(self, chunk_size=256):
+        self.chunk_size = chunk_size
+        self.data = self.load_data()
+        print('Data loaded.')
+
+    def load_data(self):
+        # check if data exists otherwise make GET request to data URL string
+        # if data exists, load data
+        if not os.path.exists('data/text8'):
+            if not os.path.exists('data'):
+                os.makedirs('data')
+            print('Downloading data...')
+            url = 'http://mattmahoney.net/dc/text8.zip'
+            r = requests.get(url, allow_redirects=True)
+            open('data/text8.zip', 'wb').write(r.content)
+            print('Download complete.')
+            # unzip data
+            import zipfile
+            with zipfile.ZipFile('data/text8.zip', 'r') as zip_ref:
+                zip_ref.extractall('data')
+        # load data
+        with open('data/text8', 'r') as f:
+            data = f.read()
+        # split data into chunks
+        chunks = [data[i:i+self.chunk_size] for i in range(0, len(data), self.chunk_size)]
+        return chunks
+
+    def __getitem__(self, index):
+        # load textual data
+        text = self.data[index]
+        return text
+
+    def __len__(self):
+        return len(self.data)
+    
+if __name__ == "__main__":
+    text8_test = Text8Dataset()
+    print(text8_test[0])
