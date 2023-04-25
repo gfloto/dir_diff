@@ -14,7 +14,7 @@ main diffusion process class
 
 class Process:
     def __init__(self, args):
-        self.O = torch.tensor(args.O).to(args.device)
+        #self.O = torch.tensor(args.O).to(args.device)
         self.h = torch.tensor(args.h).to(args.device)
         self.a = torch.tensor(args.a).to(args.device)
         self.t_min, self.t_max = args.T
@@ -74,7 +74,8 @@ from utils import get_args
 from plot import make_gif
 
 if __name__ == '__main__':
-    N = 5
+    N = 5 # number of steps
+
     # get device, data and process
     args = get_args()
     loader = mnist_dataset(8, args.k)
