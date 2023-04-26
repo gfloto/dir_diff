@@ -14,7 +14,6 @@ main diffusion process class
 
 class Process:
     def __init__(self, args):
-        #self.O = torch.tensor(args.O).to(args.device)
         self.h = torch.tensor(args.h).to(args.device)
         self.a = torch.tensor(args.a).to(args.device)
         self.t_min, self.t_max = args.T
@@ -25,6 +24,16 @@ class Process:
         tu = torch.rand(1)
         t = (self.t_max - self.t_min) * tu + self.t_min
         return t.to(self.device), tu.to(self.device)
+
+    # get initial position in OU process
+    def O(self, x, f=0.95):
+        # assume data is in [b, k, h, w]
+        assert len(x.shape) == 4
+
+        s = (1-f)/(x.shape[1]-1)
+        f1 = f - s
+        x = f1*x + s
+        return x
 
     # mean and variance of OU process at time t
     def mean_var(self, x0, t):
@@ -74,7 +83,7 @@ from utils import get_args
 from plot import make_gif
 
 if __name__ == '__main__':
-    N = 5 # number of steps
+    N = 100 # number of steps
 
     # get device, data and process
     args = get_args()
@@ -85,6 +94,7 @@ if __name__ == '__main__':
     t = torch.linspace(*args.T, N).to(args.device)
     (x0, _) = next(iter(loader))
     x0 = x0.to(args.device)
+    out = process.O(x0)
 
     print('running forward process...')
     os.makedirs('imgs', exist_ok=True)
