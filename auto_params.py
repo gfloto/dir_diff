@@ -82,6 +82,8 @@ def get_af(d, pad=3, dist=9):
     f = a - d*pad
     return a, f
 
+# TODO: generalize this whole tings into a optimization class...
+
 # step 2: find h, p_a(x) ~= sig( N(a/2, 1/(2h) ) as t -> inf
 def get_h(d, a, h_init=1., N=1000, eps=1e-2, epochs=5000):
     # we want the logit-normal to match that of the normal at t -> inf
@@ -114,38 +116,60 @@ def get_h(d, a, h_init=1., N=1000, eps=1e-2, epochs=5000):
     # throw error if not converged
     raise ValueError(f'h did not converge after {epochs} iters')
 
-# get initial stuff
-def get_Ot(x0_, a, h, O_init=3., t_init=0.1, N=1000, epochs=10000):
-    # given a, d, and h: find O and t_min
-    # we want to match mean to match x0 and var to be minimized 
-    O_ = torch.tensor(O_init, requires_grad=True)
-    t_min = torch.tensor(t_init, requires_grad=True)
-
-
-    # optimizer for O and t_min
-    opt = torch.optim.Adam([O_, t_min], lr=1e-2)
+# one hot in first position
+def fhot(O):
+    # one hot
     onht = torch.zeros(d-1)
     onht[0] = 1
+    return O * onht
+
+# helpful function to sample from OU process
+def sample(O, h, t, a, d, N=1000):
+    # get mean and variance of OU process
+    mu = O*(-h*t).exp()
+    var = 1/(2*h) * (1 - (-2*h*t).exp())
+
+    # sample in R, then map to simplex
+    sample = var.sqrt() * torch.randn(N, d-1) + mu
+    X0 = sig(sample, a)
+    return X0, mu, var
+
+# step 3: get O and t_min
+def get_Ot(x0, a, h, O_init=3., t_init=0.1, N=1000, epochs=5000):
+    d = x0.shape[0]
+    x0_a = x0[:-1] # case when k < d
+    x0_b = x0_a.clone() # case when k = d
+    x0_b[0] = x0_b[1]
+
+    # given a, d, and h: find O and t_min
+    # we want to match mean to match x0 and var to be minimized 
+    Oa = torch.tensor(O_init, requires_grad=True) # we know the true vector is onehot
+    f = torch.tensor(-O_init/np.sqrt(d), requires_grad=True)
+    t_min = torch.tensor(t_init, requires_grad=True)
+
+    # optimizer for O and t_min
+    opt = torch.optim.Adam([Oa, f, t_min], lr=1e-2)
 
     # run until convergence
     loss_track = []
     for i in range(epochs):
-        O = O_ * onht
-        mu = O*(-h*t_min).exp()
-        var = 1/(2*h) * (1 - (-2*h*t_min).exp())
+        Oa_ = fhot(Oa)
+        Ob_ = f* Oa * torch.ones(d-1)
+        X0_a, mu_a, var_a = sample(Oa_, h, t_min, a, d, N=N)
+        X0_b, mu_b, var_b = sample(Ob_, h, t_min, a, d, N=N)
 
-        # sample in R, then map to simplex
-        O_sample = var.sqrt() * torch.randn(N, d-1) + mu
-        X0 = sig(O_sample, a)
+        # stack on new dimension
+        X0 = torch.stack([X0_a, X0_b], dim=0)
 
         # get mean and std
-        m = X0.mean(dim=0)
-        v = X0.var(dim=0)
+        m = X0.mean(dim=1)
+        v = X0.var(dim=1)
 
         # loss
-        l1 = (m - x0_).pow(2).mean()
+        l1a = (m[0] - x0_a).pow(2).mean()
+        l1b = (m[1] - x0_b).pow(2).mean()
         l2 = (v - 1).pow(2).mean()
-        loss = l1 + l2
+        loss = l1a + l1b + l2
 
         # update O and t_min
         opt.zero_grad()
@@ -157,14 +181,52 @@ def get_Ot(x0_, a, h, O_init=3., t_init=0.1, N=1000, epochs=10000):
         if len(loss_track) > 100:
             loss_track.pop(0)
         if loss_track[-1] > loss_track[0]:
-            sc = score(X0, mu=mu, v=var, a=a).abs().mean()
-            return O_.detach(), t_min.detach(), [m.detach(), v.detach(), sc.detach()]
+            #sc = score(X0, mu=mu, v=var, a=a).abs().mean()
+            return Oa.detach(), f.detach(), t_min.detach()# , [m.detach(), v.detach(), sc.detach()]
 
         # no negative values allowed
         t_min.data = torch.clamp(t_min, min=1e-5)
 
+# get t_max
+def get_tmax(Oa, a, h, d, t_init=1., N=1000, eps=1e-2, epochs=5000):
+    t_max = torch.tensor(t_init, requires_grad=True)
+
+    # optimizer for h
+    opt = torch.optim.Adam([t_max], lr=1e-2)
+
+    # run until convergence
+    loss_track = []
+    for i in range(epochs):
+        X0, _, _ = sample(Oa, h, t_max, a, d, N=N)
+
+        # make mean close to a/2 and t small
+        mean = X0.mean(dim=0)
+        l1 = (mean - a/d).pow(2).mean()
+        l2 = t_max.pow(2)
+        loss = l1 + l2
+
+        # update h
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+
+        # no negative values allowed
+        t_max.data = torch.clamp(t_max, min=1e-6)
+
+        # if converged, exit
+        loss_track.append(loss.item())
+        if len(loss_track) > 100:
+            loss_track.pop(0)
+        if loss_track[-1] > loss_track[0]:
+            return t_max.detach(), mean
+
+    # throw error if not converged
+    raise ValueError(f'h did not converge after {epochs} iters')
+
+
+
 if __name__ == '__main__':
-    d = 10; pad = 3; dist = 6 / np.sqrt(d)
+    d = 4; pad = 3; dist = 6 / np.sqrt(d)
 
     # step 1: get a :and x0
     a, f = get_af(d, pad, dist)
@@ -196,14 +258,15 @@ if __name__ == '__main__':
 
     print(f'avg score: {sc.abs().mean().item():.5f}\n')
 
-    # step 3 get O and t_min
-    x0_ = x0[:-1]
-    O, t_min, info = get_Ot(x0_, a, h)
+    # step 3: get O and t_min
+    Oa, f, t_min = get_Ot(x0, a, h)
     print('step: 3')
-    print(f'O: {O.item():.5f}, t_min: {t_min.item():.5f}')
+    print(f'Oa: {Oa.item():.5f}, t_min: {t_min.item():.5f}')
+    print(f'Ob: {f * Oa}\n')
 
-    # check mean and var of x0_test
-    print(f'avg mean error: {(info[0] - x0_).abs().mean().item():.5f}')
-    print(f'avg var: {info[1].mean().item():.5f}')
-    print(f'avg score: {info[2]:.5f}')
+    # step 4: get t_max
+    t_max, mean = get_tmax(Oa, a, h, d)
+    print('step: 4')
+    print(f't_max: {t_max.item():.5f}')
+    print(f'mean error: {mean.abs().mean() - a/d:.5f}')
 
