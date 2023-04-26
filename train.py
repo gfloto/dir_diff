@@ -9,12 +9,12 @@ from tqdm import tqdm
 from utils import ptnp
 from plot import save_vis
 
+
 def train(model, process, loader, opt, logger, args):
     device = args.device; k = args.k
-
     model.train()
     loss_track = []
-    for i, (x0, _) in enumerate(tqdm(loader)):
+    for i, x0 in enumerate(tqdm(loader)):
         # get t, x0 xt
         x0 = x0.to(args.device)
         t, tu = process.t() # get scaled and unscaled t

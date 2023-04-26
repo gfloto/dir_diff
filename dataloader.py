@@ -1,5 +1,6 @@
-import os, sys
-import torch 
+import os
+import sys
+import torch
 import torch.utils.data as data
 import torchvision
 import requests
@@ -12,42 +13,54 @@ import numpy as np
 from PIL import Image
 
 # convert to onehot encoding with k categories
+
+
 class Onehot(object):
     def __init__(self, k=10):
         self.k = k
 
     def __call__(self, x):
         x *= self.k-1
-        x = torch.round(x).squeeze().type(torch.int64) # remove channel dim
+        x = torch.round(x).squeeze().type(torch.int64)  # remove channel dim
         x = one_hot(x, num_classes=self.k).type(torch.float32)
         return rearrange(x, 'h w k -> k h w')
 
 # return mnist dataset
+
+
 def mnist_dataset(batch_size, k, root='data/', num_workers=4, size=32):
     gray_transform = transforms.Compose([
-        transforms.ToTensor(), 
+        transforms.ToTensor(),
         transforms.Grayscale(),
         transforms.Resize((size, size), antialias=True),
         Onehot(k)])
-    mnist_set = torchvision.datasets.MNIST(root=root, train=True, download=True, transform=gray_transform)
-    mnist_loader = data.DataLoader(mnist_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    mnist_set = torchvision.datasets.MNIST(
+        root=root, train=True, download=True, transform=gray_transform)
+    mnist_loader = data.DataLoader(
+        mnist_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     return mnist_loader
 
 # return dataset to main train and test framework
+
+
 def celeba_dataset(batch_size, num_workers=4, size=64):
-    celeba_transform =  transforms.Compose(
+    celeba_transform = transforms.Compose(
         [transforms.ToTensor(),
-        transforms.CenterCrop((178, 178)), # square > rectangle
-        transforms.Resize((size, size))]
+         transforms.CenterCrop((178, 178)),  # square > rectangle
+         transforms.Resize((size, size))]
     )
 
-    # dataloader 
-    celeba_set = CelebaDataset(img_path='/drive2/celeba/imgs', label_path='/drive2/celeba/attr.txt', transform=celeba_transform)
-    celeba_loader = data.DataLoader(celeba_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    # dataloader
+    celeba_set = CelebaDataset(img_path='/drive2/celeba/imgs',
+                               label_path='/drive2/celeba/attr.txt', transform=celeba_transform)
+    celeba_loader = data.DataLoader(
+        celeba_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
     return celeba_loader
 
 # custom dataloader for celeba
+
+
 class CelebaDataset(Dataset):
     def __init__(self, img_path, label_path, transform):
         self.img_path = img_path
@@ -59,8 +72,9 @@ class CelebaDataset(Dataset):
 
         # load labels
         self.y = np.loadtxt(label_path, dtype=str)
-        self.img_names = self.y[:,0]
-        self.img_names = [name.replace('.jpg', '.png') for name in self.img_names]
+        self.img_names = self.y[:, 0]
+        self.img_names = [name.replace('.jpg', '.png')
+                          for name in self.img_names]
 
     def __getitem__(self, index):
         # get images, then label
@@ -76,6 +90,8 @@ class CelebaDataset(Dataset):
         return 202599
 
 # custom dataloader for LM1b
+
+
 class LM1BDataset(Dataset):
     def __init__(self):
         self.data = self.load_data()
@@ -90,7 +106,8 @@ class LM1BDataset(Dataset):
             print('Downloading data...')
             url = 'http://www.statmt.org/lm-benchmark/1-billion-word-language-modeling-benchmark-r13output.tar.gz'
             r = requests.get(url, allow_redirects=True)
-            open('data/1-billion-word-language-modeling-benchmark-r13output.tar.gz', 'wb').write(r.content)
+            open('data/1-billion-word-language-modeling-benchmark-r13output.tar.gz',
+                 'wb').write(r.content)
             print('Download complete.')
             # unzip data
             import tarfile
@@ -111,13 +128,18 @@ class LM1BDataset(Dataset):
 
     def __len__(self):
         return len(self.data)
-    
-# text8 dataset 
+
+# text8 dataset
 # data available at "http://mattmahoney.net/dc/text8.zip"
 # based off of https://github.com/undercutspiky/Char_LM_PyTorch/blob/master/dataloader.py
+
+
 class Text8Dataset(Dataset):
     def __init__(self, chunk_size=256):
         self.chunk_size = chunk_size
+        self.char2idx = {char: idx for idx, char in enumerate(
+            ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', ' '])}
+        self.idx2char = {idx: char for char, idx in self.char2idx.items()}
         self.data = self.load_data()
         print('Data loaded.')
 
@@ -140,8 +162,15 @@ class Text8Dataset(Dataset):
         with open('data/text8', 'r') as f:
             data = f.read()
         # split data into chunks
-        chunks = [data[i:i+self.chunk_size] for i in range(0, len(data), self.chunk_size)]
-        return chunks
+        chunks = [data[i:i+self.chunk_size]
+                  for i in range(0, len(data), self.chunk_size)]
+        # tokenize and encode chunks
+        encoded_chunks = []
+        for chunk in chunks:
+            tokens = list(chunk)
+            encoded_tokens = [self.char2idx[token] for token in tokens]
+            encoded_chunks.append(encoded_tokens)
+        return torch.tensor(encoded_chunks)
 
     def __getitem__(self, index):
         # load textual data
@@ -150,7 +179,19 @@ class Text8Dataset(Dataset):
 
     def __len__(self):
         return len(self.data)
-    
+
+
+def text8_dataset(batch_size, num_workers=4, chunk_size=256):
+    text8_set = Text8Dataset(chunk_size=chunk_size)
+    text8_loader = data.DataLoader(
+        text8_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    return text8_loader
+
+
 if __name__ == "__main__":
     text8_test = Text8Dataset()
-    print(text8_test[0])
+    print(text8_test[0], text8_test[0].shape)
+    text8_test_loader = text8_dataset(32)
+    for batch in text8_test_loader:
+        print(batch.shape)
+        break

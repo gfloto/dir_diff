@@ -78,16 +78,16 @@ class Residual(nn.Module):
 def Upsample(dim, dim_out = None):
     return nn.Sequential(
         nn.Upsample(scale_factor = 2, mode = 'nearest'),
-        nn.Conv2d(dim, default(dim_out, dim), 3, padding = 1)
+        nn.Conv1d(dim, default(dim_out, dim), 3, padding = 1)
     )
 
 def Downsample(dim, dim_out = None):
     return nn.Sequential(
         Rearrange('b c (h p1) (w p2) -> b (c p1 p2) h w', p1 = 2, p2 = 2),
-        nn.Conv2d(dim * 4, default(dim_out, dim), 1)
+        nn.Conv1d(dim * 4, default(dim_out, dim), 1)
     )
 
-class WeightStandardizedConv2d(nn.Conv2d):
+class WeightStandardizedConv1d(nn.Conv1d):
     """
     https://arxiv.org/abs/1903.10520
     weight standardization purportedly works synergistically with group normalization
@@ -100,7 +100,7 @@ class WeightStandardizedConv2d(nn.Conv2d):
         var = reduce(weight, 'o ... -> o 1 1 1', partial(torch.var, unbiased = False))
         normalized_weight = (weight - mean) * (var + eps).rsqrt()
 
-        return F.conv2d(x, normalized_weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
+        return F.Conv1d(x, normalized_weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
 class LayerNorm(nn.Module):
     def __init__(self, dim):
@@ -160,7 +160,7 @@ class RandomOrLearnedSinusoidalPosEmb(nn.Module):
 class Block(nn.Module):
     def __init__(self, dim, dim_out, groups = 8):
         super().__init__()
-        self.proj = WeightStandardizedConv2d(dim, dim_out, 3, padding = 1)
+        self.proj = WeightStandardizedConv1d(dim, dim_out, 3, padding = 1)
         self.norm = nn.GroupNorm(groups, dim_out)
         self.act = nn.SiLU()
 
@@ -185,7 +185,7 @@ class ResnetBlock(nn.Module):
 
         self.block1 = Block(dim, dim_out, groups = groups)
         self.block2 = Block(dim_out, dim_out, groups = groups)
-        self.res_conv = nn.Conv2d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
+        self.res_conv = nn.Conv1d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
 
     def forward(self, x, time_emb = None):
 
@@ -207,10 +207,10 @@ class LinearAttention(nn.Module):
         self.scale = dim_head ** -0.5
         self.heads = heads
         hidden_dim = dim_head * heads
-        self.to_qkv = nn.Conv2d(dim, hidden_dim * 3, 1, bias = False)
+        self.to_qkv = nn.Conv1d(dim, hidden_dim * 3, 1, bias = False)
 
         self.to_out = nn.Sequential(
-            nn.Conv2d(hidden_dim, dim, 1),
+            nn.Conv1d(hidden_dim, dim, 1),
             LayerNorm(dim)
         )
 
@@ -238,8 +238,8 @@ class Attention(nn.Module):
         self.heads = heads
         hidden_dim = dim_head * heads
 
-        self.to_qkv = nn.Conv2d(dim, hidden_dim * 3, 1, bias = False)
-        self.to_out = nn.Conv2d(hidden_dim, dim, 1)
+        self.to_qkv = nn.Conv1d(dim, hidden_dim * 3, 1, bias = False)
+        self.to_out = nn.Conv1d(hidden_dim, dim, 1)
 
     def forward(self, x):
         b, c, h, w = x.shape
@@ -280,7 +280,7 @@ class Unet(nn.Module):
         input_channels = channels * (2 if self_condition else 1)
 
         init_dim = default(init_dim, dim)
-        self.init_conv = nn.Conv2d(input_channels, init_dim, 7, padding = 3)
+        self.init_conv = nn.Conv1d(input_channels, init_dim, 7, padding = 3)
 
         dims = [init_dim, *map(lambda m: dim * m, dim_mults)]
         in_out = list(zip(dims[:-1], dims[1:]))
@@ -319,7 +319,7 @@ class Unet(nn.Module):
                 block_klass(dim_in, dim_in, time_emb_dim = time_dim),
                 block_klass(dim_in, dim_in, time_emb_dim = time_dim),
                 Residual(PreNorm(dim_in, LinearAttention(dim_in))),
-                Downsample(dim_in, dim_out) if not is_last else nn.Conv2d(dim_in, dim_out, 3, padding = 1)
+                Downsample(dim_in, dim_out) if not is_last else nn.Conv1d(dim_in, dim_out, 3, padding = 1)
             ]))
 
         mid_dim = dims[-1]
@@ -334,14 +334,14 @@ class Unet(nn.Module):
                 block_klass(dim_out + dim_in, dim_out, time_emb_dim = time_dim),
                 block_klass(dim_out + dim_in, dim_out, time_emb_dim = time_dim),
                 Residual(PreNorm(dim_out, LinearAttention(dim_out))),
-                Upsample(dim_out, dim_in) if not is_last else  nn.Conv2d(dim_out, dim_in, 3, padding = 1)
+                Upsample(dim_out, dim_in) if not is_last else  nn.Conv1d(dim_out, dim_in, 3, padding = 1)
             ]))
 
         default_out_dim = channels * (1 if not learned_variance else 2)
         self.out_dim = default(out_dim, default_out_dim)
 
         self.final_res_block = block_klass(dim * 2, dim, time_emb_dim = time_dim)
-        self.final_conv = nn.Conv2d(dim, self.out_dim, 1)
+        self.final_conv = nn.Conv1d(dim, self.out_dim, 1)
 
     def forward(self, x, time, x_self_cond = None):
         if self.self_condition:
