@@ -24,9 +24,8 @@ def sig(y, a):
     return x_
 
 # generalized inverse sigmoid
-def sig_inv(x, a):
-    xd = a - x.sum(dim=1, keepdim=True)
-    x_ = x[:, :-1]
+def sig_inv(x_, a):
+    xd = a - x_.sum(dim=1, keepdim=True)
     y = (x_/xd).log()
     return y
 
@@ -62,24 +61,25 @@ def score(x, mu=0, v=1, a=1):
     score = -1/v * (c1 + c2) + c3
     return score
 
+# TODO: include derivation that goes with this
 # step 1: get simplex size given d, pad g and dist q (rename)
-def get_af(d, g=3, q=9):
-    q = q**2
-    # 1. cushion g on all sides on simplex
-    # 2. length q from state at t_min to t_max
-    r = np.sqrt(q * (d-1)) / np.sqrt(d)
-    a1 = (-d*g - r + g) / (1/d - 1)
-    a2 = (-d*g + r + g) / (1/d - 1)
+def get_af(d, pad=3, dist=9):
+    # 1. cushion 'pad' on all sides on simplex
+    # 2. length 'dist' from state at t_min to t_max
+    dist = dist**2
+    r = np.sqrt(dist * (d-1)) / np.sqrt(d)
+    a1 = (-d*pad - r + pad) / (1/d - 1)
+    a2 = (-d*pad + r + pad) / (1/d - 1)
 
     # take smallest possible value 
     m = min(a1, a2)
-    if (m > 0 and m - d*g > 0):
+    if (m > 0 and m - d*pad > 0):
         a = m
     else:
         a = max(a1, a2)
     
     # set value and return
-    f = a - d*g
+    f = a - d*pad
     return a, f
 
 # step 2: find h, p_a(x) ~= sig( N(a/2, 1/(2h) ) as t -> inf
@@ -114,11 +114,61 @@ def get_h(d, a, h_init=1., N=1000, eps=1e-2, epochs=5000):
     # throw error if not converged
     raise ValueError(f'h did not converge after {epochs} iters')
 
+# get initial stuff
+def get_Ot(x0_, a, h, O_init=3., t_init=0.1, N=1000, epochs=10000):
+    # given a, d, and h: find O and t_min
+    # we want to match mean to match x0 and var to be minimized 
+    O_ = torch.tensor(O_init, requires_grad=True)
+    t_min = torch.tensor(t_init, requires_grad=True)
+
+
+    # optimizer for O and t_min
+    opt = torch.optim.Adam([O_, t_min], lr=1e-2)
+    onht = torch.zeros(d-1)
+    onht[0] = 1
+
+    # run until convergence
+    loss_track = []
+    for i in range(epochs):
+        O = O_ * onht
+        mu = O*(-h*t_min).exp()
+        var = 1/(2*h) * (1 - (-2*h*t_min).exp())
+
+        # sample in R, then map to simplex
+        O_sample = var.sqrt() * torch.randn(N, d-1) + mu
+        X0 = sig(O_sample, a)
+
+        # get mean and std
+        m = X0.mean(dim=0)
+        v = X0.var(dim=0)
+
+        # loss
+        l1 = (m - x0_).pow(2).mean()
+        l2 = (v - 1).pow(2).mean()
+        loss = l1 + l2
+
+        # update O and t_min
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+
+        # if converged, exit
+        loss_track.append(loss.item())
+        if len(loss_track) > 100:
+            loss_track.pop(0)
+        if loss_track[-1] > loss_track[0]:
+            sc = score(X0, mu=mu, v=var, a=a).abs().mean()
+            return O_.detach(), t_min.detach(), [m.detach(), v.detach(), sc.detach()]
+
+        # no negative values allowed
+        t_min.data = torch.clamp(t_min, min=1e-5)
+
 if __name__ == '__main__':
-    d = 2; pad = 3; dist = 9
+    d = 10; pad = 3; dist = 6 / np.sqrt(d)
 
     # step 1: get a :and x0
-    a, f = get_af(d, g=pad, q=dist)
+    a, f = get_af(d, pad, dist)
+    print('step: 1')
     print(f'a: {a:.5f}, x0: [{f + pad:.5f}, {pad}, ...]')
 
     # set initial value
@@ -129,21 +179,31 @@ if __name__ == '__main__':
     x1 = torch.zeros(d) + a/d
 
     # check that sum is close
-    #print(f'||x0||: {x0.sum().item():.5f} - should be {a:.5f}')
-    #print(f'||x1||: {x1.sum().item():.5f} - should be {a:.5f}')
-    #print(f'd(x1 - x0): {(x0 - x1).pow(2).sum().sqrt().item():.5f} - should be {dist:.5f}')
+    print(f'||x0||: {x0.sum().item():.5f} - should be {a:.5f}')
+    print(f'd(x0, x1): {(x0 - x1).pow(2).sum().sqrt().item():.5f} - should be {dist:.5f}\n')
 
     # step 2: get h
     h = get_h(d, a)
+    print('step: 2')
     print(f'h: {h:.5f}')
 
-    # check distribution of x
-    y = torch.randn(10000, d-1) / (2*h).sqrt()
+    # check average score at t -> inf
+    var = 1/(2*h)
+    noise = torch.randn(10000, d-1)
+    y = noise * var.sqrt()
     x = sig(y, a)
+    sc = score(x, mu=0, v=1/(2*h), a=a)
 
-    # plot distribution
-    # use seaborn semi-transparent
-    plt.hist(x[:, 0].detach().numpy(), bins=100, density=True, alpha=0.5)
-    plt.hist((2*h).sqrt() * y[:, 0].detach().numpy() + a/2, bins=100, density=True, alpha=0.5)
-    plt.legend(['x', 'y'])
-    plt.show()
+    print(f'avg score: {sc.abs().mean().item():.5f}\n')
+
+    # step 3 get O and t_min
+    x0_ = x0[:-1]
+    O, t_min, info = get_Ot(x0_, a, h)
+    print('step: 3')
+    print(f'O: {O.item():.5f}, t_min: {t_min.item():.5f}')
+
+    # check mean and var of x0_test
+    print(f'avg mean error: {(info[0] - x0_).abs().mean().item():.5f}')
+    print(f'avg var: {info[1].mean().item():.5f}')
+    print(f'avg score: {info[2]:.5f}')
+
