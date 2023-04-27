@@ -12,6 +12,8 @@ from einops import rearrange
 import numpy as np
 from PIL import Image
 
+from torch.functional import F
+
 # convert to onehot encoding with k categories
 
 
@@ -167,18 +169,22 @@ class Text8Dataset(Dataset):
             data = f.read()
         # split data into chunks
         chunks = [data[i:i+self.chunk_size]
-                  for i in range(0, len(data), self.chunk_size)]
+                for i in range(0, len(data), self.chunk_size)]
         # tokenize and encode chunks
         encoded_chunks = []
         for chunk in chunks:
             tokens = list(chunk)
             encoded_tokens = [self.char2idx[token] for token in tokens]
-            encoded_chunks.append(encoded_tokens)
-        return torch.tensor(encoded_chunks)
+            one_hot_encoded_tokens = F.one_hot(
+                torch.tensor(encoded_tokens), num_classes=len(self.char2idx))
+            encoded_chunks.append(one_hot_encoded_tokens)
+        return torch.stack(encoded_chunks)
 
     def __getitem__(self, index):
         # load textual data
         text = self.data[index]
+        # transpose text to have shape [vocab_size, chunk_size]
+        text = text.transpose(0, 1)
         return text
 
     def __len__(self):
