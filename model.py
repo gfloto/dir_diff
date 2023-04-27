@@ -404,11 +404,11 @@ class TransformerNetModel(nn.Module):
 
     def __init__(
             self,
-            args,
+            emb_dim,
+            vocab_size,
             dropout=0,
             config=None,
             config_name='bert-base-uncased',
-            vocab_size=None,
             init_pretrained='no',
             logits_mode=1,
             learned_sinusoidal_cond = False,
@@ -421,10 +421,10 @@ class TransformerNetModel(nn.Module):
             config = AutoConfig.from_pretrained(config_name)
             config.hidden_dropout_prob = dropout
 
-        self.input_dims = args.emb_dim
-        self.hidden_t_dim = args.emb_dim
-        self.output_dims = args.emb_dim
-        self.vocab_size = args.vocab_size
+        self.input_dims = emb_dim
+        self.hidden_t_dim = emb_dim
+        self.output_dims = emb_dim
+        self.vocab_size = vocab_size
         self.dropout = dropout
         self.logits_mode = logits_mode
         self.hidden_size = config.hidden_size
@@ -434,7 +434,7 @@ class TransformerNetModel(nn.Module):
         with torch.no_grad():
             self.lm_head.weight = self.word_embedding.weight
 
-        time_dim = args.emb_dim * 4
+        time_dim = emb_dim * 4
 
         self.random_or_learned_sinusoidal_cond = learned_sinusoidal_cond or random_fourier_features
 
@@ -442,14 +442,14 @@ class TransformerNetModel(nn.Module):
             sinu_pos_emb = RandomOrLearnedSinusoidalPosEmb(learned_sinusoidal_dim, random_fourier_features)
             fourier_dim = learned_sinusoidal_dim + 1
         else:
-            sinu_pos_emb = SinusoidalPosEmb(args.emb_dim)
-            fourier_dim = args.emb_dim
+            sinu_pos_emb = SinusoidalPosEmb(emb_dim)
+            fourier_dim = emb_dim
 
         self.time_mlp = nn.Sequential(
             sinu_pos_emb,
             nn.Linear(fourier_dim, time_dim),
             nn.GELU(),
-            nn.Linear(time_dim, time_dim)
+            nn.Linear(time_dim, config.hidden_size)
         )
 
         if self.input_dims != config.hidden_size:
@@ -520,6 +520,6 @@ class TransformerNetModel(nn.Module):
 
 
 if __name__ == "__main__":
-    model = TransformerNetModel(1, 1, 1, 1)
-    fake_data = torch.rand(64, 1, 256,1)
-    summary(model, input_data=[fake_data, 1])
+    model = TransformerNetModel(emb_dim=256, vocab_size=27)
+    fake_data = torch.rand(1, 27, 256)
+    summary(model, input_data=[fake_data, torch.tensor([1])])
