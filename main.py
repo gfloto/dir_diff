@@ -5,6 +5,7 @@ import argparse
 
 import matplotlib.pyplot as plt
 
+from auto_params import auto_param
 from plot import save_vis
 from model import Unet
 from train import train, cat_train
@@ -26,15 +27,18 @@ def save_args(args):
 if __name__ == '__main__':
     args = get_args()
     args.exp = os.path.join('results', args.exp)
+
+    # get process params
+    args = auto_param(args) 
     save_args(args)
     print(f'device: {args.device}')
+    print(f'a: {args.a:.4f}, h: {args.h:.4f}, t-min: {args.T[0]:.4f}, t-max: {args.T[1]:.4f}')
 
     # load dataset, model, optimizer and process
     loader = mnist_dataset(args.batch_size, args.k)
     ch = args.k if args.proc_name == 'cat' else args.k-1
     model = Unet(dim=64, channels=ch).to(args.device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
-    #sampler = Sampler(args)
     logger = InfoLogger()
 
     # get process
@@ -56,9 +60,6 @@ if __name__ == '__main__':
 
         loss_track.append(loss)
         print(f'epoch: {epoch}, loss: {loss}')
-
-        # sample
-        #sampler()
 
         # save model
         if epoch % 10 == 0:

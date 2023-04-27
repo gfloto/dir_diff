@@ -13,9 +13,7 @@ from utils import onehot2cat, a_logit
 from plot import save_vis
 from dataloader import mnist_dataset
 
-# things that we need
-# for a general process in d-1
-# determine: O, h, a, [t_min, t_max]
+# TODO: this code is a nightmare!! clean it up
 
 # TODO: these transformations are biased!!
 # generalized sigmoid
@@ -117,7 +115,7 @@ def get_h(d, a, h_init=1., N=1000, eps=1e-2, epochs=5000):
     raise ValueError(f'h did not converge after {epochs} iters')
 
 # one hot in first position
-def fhot(O):
+def fhot(O, d):
     # one hot
     onht = torch.zeros(d-1)
     onht[0] = 1
@@ -135,7 +133,7 @@ def sample(O, h, t, a, d, N=1000):
     return X0, mu, var
 
 # step 3: get O and t_min
-def get_Ot(x0, a, h, O_init=3., t_init=0.1, N=1000, epochs=5000):
+def get_Ot(x0, a, h, d, O_init=3., t_init=0.1, N=1000, epochs=5000):
     d = x0.shape[0]
     x0_a = x0[:-1] # case when k < d
     x0_b = x0_a.clone() # case when k = d
@@ -153,7 +151,7 @@ def get_Ot(x0, a, h, O_init=3., t_init=0.1, N=1000, epochs=5000):
     # run until convergence
     loss_track = []
     for i in range(epochs):
-        Oa_ = fhot(Oa)
+        Oa_ = fhot(Oa, d)
         Ob_ = f* Oa * torch.ones(d-1)
         X0_a, mu_a, var_a = sample(Oa_, h, t_min, a, d, N=N)
         X0_b, mu_b, var_b = sample(Ob_, h, t_min, a, d, N=N)
@@ -224,9 +222,34 @@ def get_tmax(Oa, a, h, d, t_init=1., N=1000, eps=1e-2, epochs=5000):
     raise ValueError(f'h did not converge after {epochs} iters')
 
 
+# get all params
+def auto_param(args):
+    d = args.k; pad = args.pad; dist = args.dist
+
+    # get process params
+    a, x0_f = get_af(d, pad, dist)
+    h = get_h(d, a)
+
+    # set initial value
+    x0 = torch.zeros(d) + pad
+    x0[0] += x0_f
+
+    # get more params
+    Oa, f, t_min = get_Ot(x0, a, h, d)
+    Ob = f * Oa
+    t_max, _ = get_tmax(Oa, a, h, d)
+
+    # package and return
+    args.T = [t_min.item(), t_max.item()]
+    args.O = [Oa.item(), Ob.item()]
+    args.a = a
+    args.h = h.item()
+    args.x0_f = x0_f
+
+    return args
 
 if __name__ == '__main__':
-    d = 4; pad = 3; dist = 6 / np.sqrt(d)
+    d = 4; pad = 3.0; dist = 6.0
 
     # step 1: get a :and x0
     a, f = get_af(d, pad, dist)
@@ -259,7 +282,7 @@ if __name__ == '__main__':
     print(f'avg score: {sc.abs().mean().item():.5f}\n')
 
     # step 3: get O and t_min
-    Oa, f, t_min = get_Ot(x0, a, h)
+    Oa, f, t_min = get_Ot(x0, a, h, d)
     print('step: 3')
     print(f'Oa: {Oa.item():.5f}, t_min: {t_min.item():.5f}')
     print(f'Ob: {f * Oa}\n')

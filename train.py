@@ -18,11 +18,11 @@ def train(model, process, loader, opt, logger, args):
         # get t, x0 xt
         x0 = x0.to(args.device)
         t, tu = process.t() # get scaled and unscaled t
-        xt = process.xt(x0, t)
+        xt, mu, var = process.xt(x0, t)
 
         # get correct score and predicted score
-        score = process.score(x0, xt, t)
-        score_out = model(xt[:, None, ...], tu).squeeze()
+        score = process.score(xt, mu, var)
+        score_out = model(xt, tu)
 
         # loss
         loss = torch.mean((score_out - score)**2)
