@@ -21,6 +21,10 @@ from einops.layers.torch import Rearrange
 from PIL import Image
 from tqdm.auto import tqdm
 
+from torchinfo import summary
+from transformers import AutoConfig
+from transformers.models.bert.modeling_bert import BertEncoder, BertModel
+
 # constants
 ModelPrediction =  namedtuple('ModelPrediction', ['pred_noise', 'pred_x_start'])
 
@@ -78,16 +82,16 @@ class Residual(nn.Module):
 def Upsample(dim, dim_out = None):
     return nn.Sequential(
         nn.Upsample(scale_factor = 2, mode = 'nearest'),
-        nn.Conv1d(dim, default(dim_out, dim), 3, padding = 1)
+        nn.Conv2d(dim, default(dim_out, dim), 3, padding = 1)
     )
 
 def Downsample(dim, dim_out = None):
     return nn.Sequential(
-        Rearrange('b c (h p1) (w p2) -> b (c p1 p2) h w', p1 = 2, p2 = 2),
-        nn.Conv1d(dim * 4, default(dim_out, dim), 1)
+        Rearrange('b c (h p1) (w p2) -> b (c p1 p2) h w', p1 = 1, p2 = 1),
+        nn.Conv2d(dim * 4, default(dim_out, dim), 1)
     )
 
-class WeightStandardizedConv1d(nn.Conv1d):
+class WeightStandardizedConv2d(nn.Conv2d):
     """
     https://arxiv.org/abs/1903.10520
     weight standardization purportedly works synergistically with group normalization
@@ -100,7 +104,7 @@ class WeightStandardizedConv1d(nn.Conv1d):
         var = reduce(weight, 'o ... -> o 1 1 1', partial(torch.var, unbiased = False))
         normalized_weight = (weight - mean) * (var + eps).rsqrt()
 
-        return F.Conv1d(x, normalized_weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
+        return F.conv2d(x, normalized_weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
 class LayerNorm(nn.Module):
     def __init__(self, dim):
@@ -160,7 +164,7 @@ class RandomOrLearnedSinusoidalPosEmb(nn.Module):
 class Block(nn.Module):
     def __init__(self, dim, dim_out, groups = 8):
         super().__init__()
-        self.proj = WeightStandardizedConv1d(dim, dim_out, 3, padding = 1)
+        self.proj = WeightStandardizedConv2d(dim, dim_out, 3, padding = 1)
         self.norm = nn.GroupNorm(groups, dim_out)
         self.act = nn.SiLU()
 
@@ -185,7 +189,7 @@ class ResnetBlock(nn.Module):
 
         self.block1 = Block(dim, dim_out, groups = groups)
         self.block2 = Block(dim_out, dim_out, groups = groups)
-        self.res_conv = nn.Conv1d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
+        self.res_conv = nn.Conv2d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
 
     def forward(self, x, time_emb = None):
 
@@ -207,10 +211,10 @@ class LinearAttention(nn.Module):
         self.scale = dim_head ** -0.5
         self.heads = heads
         hidden_dim = dim_head * heads
-        self.to_qkv = nn.Conv1d(dim, hidden_dim * 3, 1, bias = False)
+        self.to_qkv = nn.Conv2d(dim, hidden_dim * 3, 1, bias = False)
 
         self.to_out = nn.Sequential(
-            nn.Conv1d(hidden_dim, dim, 1),
+            nn.Conv2d(hidden_dim, dim, 1),
             LayerNorm(dim)
         )
 
@@ -238,8 +242,8 @@ class Attention(nn.Module):
         self.heads = heads
         hidden_dim = dim_head * heads
 
-        self.to_qkv = nn.Conv1d(dim, hidden_dim * 3, 1, bias = False)
-        self.to_out = nn.Conv1d(hidden_dim, dim, 1)
+        self.to_qkv = nn.Conv2d(dim, hidden_dim * 3, 1, bias = False)
+        self.to_out = nn.Conv2d(hidden_dim, dim, 1)
 
     def forward(self, x):
         b, c, h, w = x.shape
@@ -280,7 +284,7 @@ class Unet(nn.Module):
         input_channels = channels * (2 if self_condition else 1)
 
         init_dim = default(init_dim, dim)
-        self.init_conv = nn.Conv1d(input_channels, init_dim, 7, padding = 3)
+        self.init_conv = nn.Conv2d(input_channels, init_dim, 7, padding = 3)
 
         dims = [init_dim, *map(lambda m: dim * m, dim_mults)]
         in_out = list(zip(dims[:-1], dims[1:]))
@@ -319,7 +323,7 @@ class Unet(nn.Module):
                 block_klass(dim_in, dim_in, time_emb_dim = time_dim),
                 block_klass(dim_in, dim_in, time_emb_dim = time_dim),
                 Residual(PreNorm(dim_in, LinearAttention(dim_in))),
-                Downsample(dim_in, dim_out) if not is_last else nn.Conv1d(dim_in, dim_out, 3, padding = 1)
+                Downsample(dim_in, dim_out) if not is_last else nn.Conv2d(dim_in, dim_out, 3, padding = 1)
             ]))
 
         mid_dim = dims[-1]
@@ -334,20 +338,19 @@ class Unet(nn.Module):
                 block_klass(dim_out + dim_in, dim_out, time_emb_dim = time_dim),
                 block_klass(dim_out + dim_in, dim_out, time_emb_dim = time_dim),
                 Residual(PreNorm(dim_out, LinearAttention(dim_out))),
-                Upsample(dim_out, dim_in) if not is_last else  nn.Conv1d(dim_out, dim_in, 3, padding = 1)
+                Upsample(dim_out, dim_in) if not is_last else  nn.Conv2d(dim_out, dim_in, 3, padding = 1)
             ]))
 
         default_out_dim = channels * (1 if not learned_variance else 2)
         self.out_dim = default(out_dim, default_out_dim)
 
         self.final_res_block = block_klass(dim * 2, dim, time_emb_dim = time_dim)
-        self.final_conv = nn.Conv1d(dim, self.out_dim, 1)
+        self.final_conv = nn.Conv2d(dim, self.out_dim, 1)
 
     def forward(self, x, time, x_self_cond = None):
         if self.self_condition:
             x_self_cond = default(x_self_cond, lambda: torch.zeros_like(x))
             x = torch.cat((x_self_cond, x), dim = 1)
-
         x = self.init_conv(x)
         r = x.clone()
 
@@ -385,3 +388,138 @@ class Unet(nn.Module):
         x = self.final_conv(x)
 
         return x
+
+
+class TransformerNetModel(nn.Module):
+    """
+    The full Transformer model with attention and timestep embedding.
+    :param input_dims: dims of the input Tensor.
+    :param output_dims: dims of the output Tensor.
+    :param hidden_t_dim: dims of time embedding.
+    :param dropout: the dropout probability.
+    :param config/config_name: the config of PLMs.
+    :param init_pretrained: bool, init whole network params with PLMs.
+    :param vocab_size: the size of vocabulary
+    """
+
+    def __init__(
+            self,
+            args,
+            dropout=0,
+            config=None,
+            config_name='bert-base-uncased',
+            vocab_size=None,
+            init_pretrained='no',
+            logits_mode=1,
+            learned_sinusoidal_cond = False,
+            random_fourier_features = False,
+            learned_sinusoidal_dim = 16
+    ):
+        super().__init__()
+
+        if config is None:
+            config = AutoConfig.from_pretrained(config_name)
+            config.hidden_dropout_prob = dropout
+
+        self.input_dims = args.emb_dim
+        self.hidden_t_dim = args.emb_dim
+        self.output_dims = args.emb_dim
+        self.vocab_size = args.vocab_size
+        self.dropout = dropout
+        self.logits_mode = logits_mode
+        self.hidden_size = config.hidden_size
+
+        self.word_embedding = nn.Embedding(self.vocab_size, self.input_dims)
+        self.lm_head = nn.Linear(self.input_dims, self.vocab_size)
+        with torch.no_grad():
+            self.lm_head.weight = self.word_embedding.weight
+
+        time_dim = args.emb_dim * 4
+
+        self.random_or_learned_sinusoidal_cond = learned_sinusoidal_cond or random_fourier_features
+
+        if self.random_or_learned_sinusoidal_cond:
+            sinu_pos_emb = RandomOrLearnedSinusoidalPosEmb(learned_sinusoidal_dim, random_fourier_features)
+            fourier_dim = learned_sinusoidal_dim + 1
+        else:
+            sinu_pos_emb = SinusoidalPosEmb(args.emb_dim)
+            fourier_dim = args.emb_dim
+
+        self.time_mlp = nn.Sequential(
+            sinu_pos_emb,
+            nn.Linear(fourier_dim, time_dim),
+            nn.GELU(),
+            nn.Linear(time_dim, time_dim)
+        )
+
+        if self.input_dims != config.hidden_size:
+            self.input_up_proj = nn.Sequential(nn.Linear(self.input_dims, config.hidden_size),
+                                               nn.Tanh(),
+                                               nn.Linear(config.hidden_size, config.hidden_size))
+
+        if init_pretrained == 'bert':
+            print('initializing from pretrained bert...')
+            print(config)
+            temp_bert = BertModel.from_pretrained(config_name, config=config)
+
+            self.word_embedding = temp_bert.embeddings.word_embeddings
+            with torch.no_grad():
+                self.lm_head.weight = self.word_embedding.weight
+
+            self.input_transformers = temp_bert.encoder
+            self.register_buffer("position_ids", torch.arange(config.max_position_embeddings).expand((1, -1)))
+            self.position_embeddings = temp_bert.embeddings.position_embeddings
+            self.LayerNorm = temp_bert.embeddings.LayerNorm
+
+            del temp_bert.embeddings
+            del temp_bert.pooler
+
+        elif init_pretrained == 'no':
+            self.input_transformers = BertEncoder(config)
+            self.register_buffer("position_ids", torch.arange(config.max_position_embeddings).expand((1, -1)))
+            self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
+            self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+
+        else:
+            assert False, "invalid type of init_pretrained"
+
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+        if self.output_dims != config.hidden_size:
+            self.output_down_proj = nn.Sequential(nn.Linear(config.hidden_size, config.hidden_size),
+                                                  nn.Tanh(), nn.Linear(config.hidden_size, self.output_dims))
+
+    def forward(self, x, time):
+        """
+        Apply the model to an input batch.
+        :param x: an [N x C x ...] Tensor of inputs.
+        :param t: an [N x 1] 1-D batch of timesteps.
+        :return: an [N x C x ...] Tensor of outputs.
+        """
+        emb_t = self.time_mlp(time)
+
+        if self.input_dims != self.hidden_size:
+            emb_x = self.input_up_proj(x)
+        else:
+            emb_x = x
+
+        seq_length = x.size(1)
+        position_ids = self.position_ids[:, : seq_length]
+        emb_inputs = self.position_embeddings(position_ids) + emb_x + emb_t.unsqueeze(1).expand(-1, seq_length, -1)
+        emb_inputs = self.dropout(self.LayerNorm(emb_inputs))
+
+        input_trans_hidden_states = self.input_transformers(emb_inputs).last_hidden_state
+
+        if self.output_dims != self.hidden_size:
+            h = self.output_down_proj(input_trans_hidden_states)
+        else:
+            h = input_trans_hidden_states
+        h = h.type(x.dtype)
+        return h
+
+
+
+if __name__ == "__main__":
+    model = TransformerNetModel(1, 1, 1, 1)
+    fake_data = torch.rand(64, 1, 256,1)
+    summary(model, input_data=[fake_data, 1])

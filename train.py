@@ -16,7 +16,7 @@ def train(model, process, loader, opt, logger, args):
     loss_track = []
     for i, x0 in enumerate(tqdm(loader)):
         # get t, x0 xt
-        x0 = x0.to(args.device)
+        x0 = x0[0].to(args.device)
         t, tu = process.t() # get scaled and unscaled t
         xt = process.xt(x0, t)
 
@@ -31,7 +31,7 @@ def train(model, process, loader, opt, logger, args):
         opt.zero_grad()
         loss.backward()
         opt.step()
-    
+
         # save loss
         loss_track.append(ptnp(loss))
 

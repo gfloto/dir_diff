@@ -129,11 +129,15 @@ class LM1BDataset(Dataset):
     def __len__(self):
         return len(self.data)
 
+def lm1b_dataset(batch_size, num_workers=4):
+    lm1b_set = LM1BDataset()
+    lm1b_loader = data.DataLoader(
+        lm1b_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    return lm1b_loader
+
 # text8 dataset
 # data available at "http://mattmahoney.net/dc/text8.zip"
 # based off of https://github.com/undercutspiky/Char_LM_PyTorch/blob/master/dataloader.py
-
-
 class Text8Dataset(Dataset):
     def __init__(self, chunk_size=256):
         self.chunk_size = chunk_size
@@ -193,5 +197,12 @@ if __name__ == "__main__":
     print(text8_test[0], text8_test[0].shape)
     text8_test_loader = text8_dataset(32)
     for batch in text8_test_loader:
+        print(batch.shape)
+        break
+
+    lm1b_test = LM1BDataset()
+    print(lm1b_test[0])
+    lm1b_test_loader = lm1b_dataset(32)
+    for batch in lm1b_test_loader:
         print(batch.shape)
         break
