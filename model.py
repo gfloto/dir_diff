@@ -21,18 +21,10 @@ from einops.layers.torch import Rearrange
 from PIL import Image
 from tqdm.auto import tqdm
 
-#from ema_pytorch import EMA
-#from accelerate import Accelerator
-#from pytorch_fid.inception import InceptionV3
-#from pytorch_fid.fid_score import calculate_frechet_distance
-#from denoising_diffusion_pytorch.version import __version__
-
 # constants
-
 ModelPrediction =  namedtuple('ModelPrediction', ['pred_noise', 'pred_x_start'])
 
 # helpers functions
-
 def exists(x):
     return x is not None
 
@@ -165,7 +157,6 @@ class RandomOrLearnedSinusoidalPosEmb(nn.Module):
         return fouriered
 
 # building block modules
-
 class Block(nn.Module):
     def __init__(self, dim, dim_out, groups = 8):
         super().__init__()
@@ -317,7 +308,6 @@ class Unet(nn.Module):
         )
 
         # layers
-
         self.downs = nn.ModuleList([])
         self.ups = nn.ModuleList([])
         num_resolutions = len(in_out)
@@ -392,4 +382,6 @@ class Unet(nn.Module):
         x = torch.cat((x, r), dim = 1)
 
         x = self.final_res_block(x, t)
-        return self.final_conv(x)
+        x = self.final_conv(x)
+
+        return x
