@@ -1,0 +1,18 @@
+Impliment D3PM!!!
+	- Loss function - Griffin
+	- Generalize noising to work with text
+
+Noising function
+	- Gauss for image
+	- Mask for text (text8 only)
+	- Uniform - Complete
+	- BONUS - Absorbing
+
+Eval Functions
+	- How to get NLL? - Griffin
+	- Perplexity for text
+	- Inception Score and FID and image
+
+Lower Priority
+	- Transformer for text8
+
