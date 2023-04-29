@@ -201,3 +201,80 @@ $$
     \nabla_x\textrm{log }p_a(x)_i = -\frac{1}{vx_d}\sum_{k=1}^{d-1}\gamma_\mu^k(\bm{x}) - \frac{1}{vx_i}\gamma_\mu^i(\bm{x}) + \frac{x_i - x_d}{x_ix_d} \\
 \end{aligned}
 $$
+
+# Sampling and Ito's Lemma
+
+We are working with an OU process of the following form:
+
+$$d\bm{X}_t = -\theta\bm{X}_t dt + d\bm{B}_t$$
+
+with a corresponding process:
+
+$$\bm{S}_t = \sigma^a(\bm{X}_t)$$
+
+To keep this section self-contained the definition of $\sigma_a$ is:
+
+$$\sigma^a_i(\bm{y}) = \frac{ae^{y_i}}{1+\sum_{k=1}^{d-1}e^{y_k}}, i\in \{1,\dots,d-1\}$$
+
+To sample from our model, we must write $S_t$ in a form where $S_t = f(x,t)dt + g(x,t)dB_t$. This can be done via Ito's Lemma:
+
+$$dS_i = -\theta(\nabla_X\sigma^a_i(\bm{X}))^\top \bm{X} + \frac{1}{2}\textrm{Tr}[H_{X}\sigma^a_i(\bm{X})]dt + \nabla_X\sigma^a_i(\bm{X})^\top d\bm{B}$$
+
+Where $H_X$ is the Hessian matrix and we drop the time dependence of $\bm{S}_t$ and $\bm{X}_t$ for notational simplicity. 
+
+---
+
+First we deal with the gradient term of the equation. We will use $\gamma(\bm{X}) = 1 + \sum_{k=1}^{d-1}e^{X_k}$ to keep notation smaller.
+
+$$
+\begin{aligned}
+    \nabla_X\sigma^a_i(\bm{X}) := \bm{g} &= \nabla_X\frac{ae^{X_i}}{\gamma(\bm{X})} \\
+    g_j &= \frac{\partial}{\partial X_{j}} \frac{ae^{X_i}}{\gamma(\bm{X})}
+\end{aligned}
+$$
+
+We deal with the case when when $j=i$ below
+$$
+\begin{aligned}
+    g_i &= \frac{\partial}{\partial X_{i}} \frac{ae^{X_i}}{\gamma(\bm{X})} \\
+    &= \gamma(\bm{X})^{-2}\left[\gamma(\bm{X})\frac{\partial}{\partial X_i} ae^{X_i} - ae^{X_i}\frac{\partial}{\partial X_i}\gamma(\bm{X})\right] \\ 
+    &= \gamma(\bm{X})^{-2}\left[ae^{X_i}\gamma(\bm{X}) - ae^{2X_i}\right] \\ 
+    &= a\sigma_i(\bm{X})\gamma(\bm{X})^{-1}[\gamma(\bm{X}) - e^{X_i}] \\
+    &= a\sigma_i(\bm{X})(1-\sigma_i(\bm{X})) \\
+\end{aligned}
+$$
+
+and the case when $j\neq i$:
+$$
+\begin{aligned}
+    g_j &= \frac{\partial}{\partial X_{j}} \frac{ae^{X_i}}{\gamma(\bm{X})} \\
+    &= -\frac{ae^{X_i}e^{X_j}}{\gamma(X)^2} \\
+    &= -a\sigma_i(\bm{X})\sigma_j(\bm{X})
+\end{aligned}
+$$
+
+---
+
+Next we deal with the trace Hessian term:
+
+$$\textrm{Tr}[H_{X}\sigma^a_i(\bm{X})] = \sum_{j=1}^{d-1}\frac{\partial^2}{\partial X_j^2} \sigma^a_i(\bm{X})$$
+
+which again can be split into two cases. First we deal with the case when $j=i$
+
+$$
+\begin{aligned}
+    \frac{\partial^2}{\partial X_i^2} \sigma^a_i(\bm{X}) &= a\frac{\partial}{\partial X_i} \sigma_i(\bm{X})(1-\sigma_i(\bm{X})) \\
+    &= a\sigma_i(\bm{X})(1-\sigma_i(\bm{X}))(1-2\sigma_i(\bm{X}))
+\end{aligned}
+$$
+
+Then the case where $j\neq i$
+
+$$
+\begin{aligned}
+    \frac{\partial^2}{\partial X_j^2} \sigma^a_i(\bm{X}) &= -a\frac{\partial}{\partial X_j} \sigma_i(\bm{X})\sigma_j(\bm{X})\\
+    &= -a^2\sigma_i(\bm{X})\sigma_j(\bm{X})(1 - 2\sigma_j(\bm{X}))
+\end{aligned}
+$$
+
+---
