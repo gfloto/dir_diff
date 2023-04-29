@@ -198,6 +198,6 @@ For the final results, we must combine the $h$ and $g$ terms together to get:
 
 $$
 \begin{aligned}
-    \textrm{log }p_a(x)_i = -\frac{1}{vx_d}\sum_{k=1}^{d-1}\gamma_\mu^k(\bm{x}) - \frac{1}{vx_i}\gamma_\mu^i(\bm{x}) + \frac{x_i - x_d}{x_ix_d} \\
+    \nabla_x\textrm{log }p_a(x)_i = -\frac{1}{vx_d}\sum_{k=1}^{d-1}\gamma_\mu^k(\bm{x}) - \frac{1}{vx_i}\gamma_\mu^i(\bm{x}) + \frac{x_i - x_d}{x_ix_d} \\
 \end{aligned}
 $$
