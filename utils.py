@@ -37,10 +37,10 @@ def a_logit(x, a):
     return x.log() - (a-x).log()
 
 def onehot2cat(x, k):
-    return torch.argmax(x, dim=1) / (k-1)
+    return torch.argmax(x, dim=1)
 
 def cat2onehot(x, k):
-    x = one_hot(x * (k-1), k).float() 
+    x = one_hot(x, k).float() 
     return rearrange(x, 'b h w k -> b k h w')
 
 # useful torch -> numpy

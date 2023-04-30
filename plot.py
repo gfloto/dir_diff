@@ -11,14 +11,14 @@ from utils import onehot2cat
 
 # make gif from images, name is f'path/{}.png' from 0 to n
 def make_gif(path, name, n):
-        print('making gif...')
-        images = []
-        for i in range(n):
-            images.append(imageio.imread(os.path.join(path, f'{i}.png')))
-        imageio.mimsave(f'{name}', images)
+    print('making gif...')
+    images = []
+    for i in range(n):
+        images.append(imageio.imread(os.path.join(path, f'{i}.png')))
+    imageio.mimsave(f'{name}', images)
 
-        # remove images and folder
-        shutil.rmtree('imgs')
+    # remove images and folder
+    shutil.rmtree('imgs')
 
 # visualize images
 # x can be list of tensors or tensor
@@ -56,6 +56,7 @@ def save_vis(x, path, k=None, a=1, n=8):
     fig = plt.figure(figsize=(2*n, 4*imgs))
     plt.imshow(img, cmap='gray', vmin=0, vmax=1)
     plt.axis('off')
+    plt.tight_layout()
     plt.savefig(path)
     plt.close()
 
