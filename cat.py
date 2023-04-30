@@ -126,11 +126,11 @@ def test_gaussian_case(K, beta_values):
 
 
 
-from dataloader import mnist_dataset
+from dataloader import mnist_dataset, text8_dataset 
 
 # test noising process
 if __name__ == '__main__':
-    test_qt_vectorization = True
+    test_qt_vectorization = False
     if test_qt_vectorization:
         K = 10
         beta_values = [0.1, 0.2, 0.3]
@@ -141,8 +141,8 @@ if __name__ == '__main__':
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         # get data  
-        loader = mnist_dataset(8, k)
-        (x0, _) = next(iter(loader))
+        loader = text8_dataset(batch_size=1, num_workers=0)
+        x0 = next(iter(loader))
         x0 = x0.to(device)
 
         # get process
