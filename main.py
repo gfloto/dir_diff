@@ -12,7 +12,7 @@ from train import train, cat_train
 from sample import Sampler
 from cat import CatProcess
 from process import Process
-from dataloader import mnist_dataset
+from dataloader import text8_dataset, mnist_dataset
 from utils import InfoLogger, save_path, get_args
 
 # sample arguments as json
@@ -35,7 +35,8 @@ if __name__ == '__main__':
     print(f'a: {args.a:.4f}, h: {args.h:.4f}, t-min: {args.T[0]:.4f}, t-max: {args.T[1]:.4f}')
 
     # load dataset, model, optimizer and process
-    loader = mnist_dataset(args.batch_size, args.k)
+    loader = text8_dataset(batch_size=args.batch_size)
+    # loader = mnist_dataset(args.batch_size, args.k)
     ch = args.k if args.proc_name == 'cat' else args.k-1
     model = Unet(dim=64, channels=ch).to(args.device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
