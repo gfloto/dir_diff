@@ -45,6 +45,7 @@ class Process:
         d = x0.shape[1]
         O = x0[:, :-1]
 
+        # convert from S -> O
         # make Oa if cat is d-1 classes
         O *= self.Oa
 

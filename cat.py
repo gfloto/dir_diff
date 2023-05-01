@@ -7,7 +7,7 @@ from plot import save_vis, make_gif
 from utils import cat2onehot
 
 # useful sampling function
-def sample(q, k=2):
+def sample(q, k):
     q = rearrange(q, 'b k h w -> b h w k')
     out = dist.Categorical(q).sample()
     return cat2onehot(out, k=k)
@@ -22,10 +22,12 @@ see: https://arxiv.org/pdf/2107.03006.pdf
 '''
 
 class CatProcess:
-    def __init__(self, k, T, betas, device):
+    def __init__(self, k, T, betas, method, device):
         self.k = k
         self.T = T
         self.betas = betas
+        self.method = method
+        self.data_type = 'image'
         self.device = device
 
         self.Q_bar = self.Q_bar(T)
@@ -34,7 +36,7 @@ class CatProcess:
     def xt(self, x0, t):
         # sample from q(xt | x0)
         p = mm(self.Q_bar[t], x0)
-        xt = sample(p) 
+        xt = sample(p, self.k) 
         return xt
 
     # compute Qt transition matrix 
@@ -61,16 +63,6 @@ class CatProcess:
                         Qt[i, j] = torch.exp(-4 * (i - j) ** 2 / ((self.k - 1) ** 2 * beta_t)) / normalization
             Qt[range(self.k), range(self.k)] = 1 - Qt.sum(dim=1)
         elif method == "gaussian_vectorized":
-            beta_t = self.betas[t]
-            Qt = torch.zeros(self.k, self.k)
-            beta_t = torch.tensor(beta_t)
-            normalization = torch.sum(torch.exp(-4 * (torch.arange(-(self.k - 1), self.k) ** 2) / ((self.k - 1) ** 2 * beta_t)))
-            i, j = torch.meshgrid(torch.arange(self.k), torch.arange(self.k))
-            Qt = torch.exp(-4 * (i - j) ** 2 / ((self.k - 1) ** 2 * beta_t)) / normalization
-            Qt[range(self.k), range(self.k)] = 0
-            Qt[range(self.k), range(self.k)] = 1 - Qt.sum(dim=1)
-
-        return Qt.to(self.device)
 
     # Q_bar is q(x_t | x_0) (which is just Q_1 @ Q_2 @ ...)
     def Q_bar(self, t):
@@ -125,44 +117,36 @@ def test_gaussian_case(K, beta_values):
         assert torch.allclose(Q1, Q2)
 
 
-
 from dataloader import mnist_dataset, text8_dataset 
 
 # test noising process
 if __name__ == '__main__':
-    test_qt_vectorization = False
-    if test_qt_vectorization:
-        K = 10
-        beta_values = [0.1, 0.2, 0.3]
-        test_gaussian_case(K, beta_values)
-    else:
-        k = 2; T = 1000; 
-        betas = torch.linspace(1e-4, 0.02, T)
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    k = 10; T = 500; 
+    methods = ['uniform', 'absorbing', 'gaussian', 'gaussian_vectorized']
+    betas = torch.linspace(1e-4, 0.02, T)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        # get data  
-        loader = text8_dataset(batch_size=1, num_workers=0)
-        x0 = next(iter(loader))
-        x0 = x0.to(device)
+    # get data  
+    loader = mnist_dataset(8, k)
+    (x, _) = next(iter(loader))
+
+    for method in methods:
+        x0 = x.clone().to(device)
 
         # get process
-        process = CatProcess(k, T, betas, device)
+        process = CatProcess(k, T, betas, method, device)
 
         # test forward process
         r = 10
-        print('running forward process...')
+        print(f'running {method} forward process...')
         os.makedirs('imgs', exist_ok=True)
         for t in range(T):
-            qbar = process.Q_bar[t]
-            sys.exit()
-
             # apply qbar to x0
             xt = process.xt(x0, t)
 
             # save image
             if t % r == 0:
-                save_vis(xt, f'imgs/{int(t/r)}.png', k=None, n=8)
+                save_vis(xt, f'imgs/{int(t/r)}.png', k=k, n=8)
 
         # make gif of forward process
-        make_gif('imgs', 'results/cat_for.gif', T//r)
-
+        make_gif('imgs', f'results/cat_{method}.gif', T//r)

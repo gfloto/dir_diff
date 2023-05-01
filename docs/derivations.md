@@ -198,6 +198,115 @@ For the final results, we must combine the $h$ and $g$ terms together to get:
 
 $$
 \begin{aligned}
-    \textrm{log }p_a(x)_i = -\frac{1}{vx_d}\sum_{k=1}^{d-1}\gamma_\mu^k(\bm{x}) - \frac{1}{vx_i}\gamma_\mu^i(\bm{x}) + \frac{x_i - x_d}{x_ix_d} \\
+    \nabla_x\textrm{log }p_a(x)_i = -\frac{1}{vx_d}\sum_{k=1}^{d-1}\gamma_\mu^k(\bm{x}) - \frac{1}{vx_i}\gamma_\mu^i(\bm{x}) + \frac{x_i - x_d}{x_ix_d} \\
 \end{aligned}
 $$
+
+# Sampling and Ito's Lemma
+
+We are working with an OU process of the following form:
+
+$$d\bm{X}_t = -\theta\bm{X}_t dt + d\bm{B}_t$$
+
+with a corresponding process:
+
+$$\bm{S}_t = \sigma^a(\bm{X}_t)$$
+
+To keep this section self-contained the definition of $\sigma_a$ is:
+
+$$\sigma^a_i(\bm{y}) = \frac{ae^{y_i}}{1+\sum_{k=1}^{d-1}e^{y_k}}, i\in \{1,\dots,d-1\}$$
+
+To sample from our model, we must write $S_t$ in a form where $S_t = f(x,t)dt + g(x,t)dB_t$. This can be done via Ito's Lemma:
+
+$$dS_i = -\theta(\nabla_X\sigma^a_i(\bm{X}))^\top \bm{X}dt + \frac{1}{2}\textrm{Tr}[H_{X}\sigma^a_i(\bm{X})]dt + \nabla_X\sigma^a_i(\bm{X})^\top d\bm{B}$$
+
+Where $H_X$ is the Hessian matrix and we drop the time dependence of $\bm{S}_t$ and $\bm{X}_t$ for notational simplicity. 
+
+---
+
+First we deal with the gradient term of the equation. We will use $\gamma(\bm{X}) = 1 + \sum_{k=1}^{d-1}e^{X_k}$ to keep notation smaller.
+
+$$
+\begin{aligned}
+    \nabla_X\sigma^a_i(\bm{X}) := \bm{g} &= \nabla_X\frac{ae^{X_i}}{\gamma(\bm{X})} \\
+    g_j &= \frac{\partial}{\partial X_{j}} \frac{ae^{X_i}}{\gamma(\bm{X})}
+\end{aligned}
+$$
+
+We deal with the case when when $j=i$ below
+$$
+\begin{aligned}
+    g_i &= \frac{\partial}{\partial X_{i}} \frac{ae^{X_i}}{\gamma(\bm{X})} \\
+    &= \gamma(\bm{X})^{-2}\left[\gamma(\bm{X})\frac{\partial}{\partial X_i} ae^{X_i} - ae^{X_i}\frac{\partial}{\partial X_i}\gamma(\bm{X})\right] \\ 
+    &= \gamma(\bm{X})^{-2}\left[ae^{X_i}\gamma(\bm{X}) - ae^{2X_i}\right] \\ 
+    &= a\sigma_i(\bm{X})\gamma(\bm{X})^{-1}[\gamma(\bm{X}) - e^{X_i}] \\
+    &= a\sigma_i(\bm{X})(1-\sigma_i(\bm{X})) \\
+\end{aligned}
+$$
+
+and the case when $j\neq i$:
+$$
+\begin{aligned}
+    g_j &= \frac{\partial}{\partial X_{j}} \frac{ae^{X_i}}{\gamma(\bm{X})} \\
+    &= -\frac{ae^{X_i}e^{X_j}}{\gamma(X)^2} \\
+    &= -a\sigma_i(\bm{X})\sigma_j(\bm{X}) \\
+\end{aligned}
+$$
+
+---
+
+Next we deal with the trace Hessian term:
+
+$$\textrm{Tr}[H_{X}\sigma^a_i(\bm{X})] = \sum_{j=1}^{d-1}\frac{\partial^2}{\partial X_j^2} \sigma^a_i(\bm{X})$$
+
+which again can be split into two cases. First we deal with the case when $j=i$
+
+$$
+\begin{aligned}
+    \frac{\partial^2}{\partial X_i^2} \sigma^a_i(\bm{X}) &= a\frac{\partial}{\partial X_i} \sigma_i(\bm{X})(1-\sigma_i(\bm{X})) \\
+    &= a\sigma_i(\bm{X})(1-\sigma_i(\bm{X}))(1-2\sigma_i(\bm{X})) \\
+\end{aligned}
+$$
+
+Then the case where $j\neq i$
+
+$$
+\begin{aligned}
+    \frac{\partial^2}{\partial X_j^2} \sigma^a_i(\bm{X}) &= -a\frac{\partial}{\partial X_j} \sigma_i(\bm{X})\sigma_j(\bm{X})\\
+    &= -a^2\sigma_i(\bm{X})\sigma_j(\bm{X})(1 - 2\sigma_j(\bm{X}))
+\end{aligned}
+$$
+
+---
+
+## Vectorized Implimentation
+
+We would like a vectorized implimentation in the following form:
+
+$$d\bm{S}_t = -\theta J\bm{X}_tdt + \frac{1}{2}hdt + J\bm{B}_t $$
+
+where $J_i=\nabla_X\sigma^a_i(\bm{X}_t)$ is the vectorized gradient (Jacobian), and $h_i =  \textrm{Tr}[H_{X}\sigma^a_i(\bm{X_t})]$
+
+Beginning with $J$ we have:
+
+$$
+\begin{aligned}
+    J_{ii} &= a\sigma_i(\bm{X})(1-\sigma_i(\bm{X})), i = j \\
+    J_{ij} &= -a\sigma_i(\bm{X})\sigma_j(\bm{X}), i\neq j \\
+\end{aligned}
+$$
+
+Leaving us with a vectorized version:
+
+$$ J = a\bm{S}_t\bm{1}^\top \odot \textrm{diag}_1\left([1-\bm{S}_t]\bm{1}^\top\right) \odot \textrm{diag}^1\left(\bm{1}^\top \bm{S}_t\right) $$
+
+where $\textrm{diag}_1()$ take a matrix and sets all values besides the diagonal to $1$ while keeping other elemets the same. Similarily, $\textrm{diag}^1()$ takes a matrix and sets the diagonals to $1$ and keeps everything else the same.
+
+For the Hessian term $h$ we have do the following:
+$$ h_i = a\sigma_i(\bm{X})(1-\sigma_i(\bm{X}))(1-2\sigma_i(\bm{X}))+\sum_{j\neq i}^{d-1}-a^2\sigma_i(\bm{X})\sigma_j(\bm{X})(1 - 2\sigma_j(\bm{X}))$$
+
+and can vectorize this to:
+
+$$ h = a\bm{S}_t(1-\bm{S}_t)(1-2\bm{S}_t) + \textrm{diag}^0(\bm{S}_t\bm{1}^\top) (\bm{S}_t[1 - 2\bm{S}_t]) $$
+
+where $\textrm{diag}^0()$ takes a matrix and sets all values in the the diagonal to $0$ while keeping other elemets the same.
