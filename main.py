@@ -36,9 +36,12 @@ if __name__ == '__main__':
 
     # load dataset, model, optimizer and process
     loader = mnist_dataset(args.batch_size, args.k)
-    ch = args.k if args.proc_name == 'cat' else args.k-1
+    ch = args.k if args.proc_name == 'cat' else args.k
     model = Unet(dim=64, channels=ch).to(args.device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+    if args.proc_name == 'cat':
+        lambda_model = Unet(dim=64, channels=ch).to(args.device)
+        lambda_opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     logger = InfoLogger()
 
     # get process
@@ -56,7 +59,8 @@ if __name__ == '__main__':
         if args.proc_name == 'simplex':
             loss = train(model, process, loader, opt, logger, args)
         elif args.proc_name == 'cat':
-            loss = cat_train(model, process, loader, opt, args)
+            loss = cat_train(model, lambda_model, process, loader, opt,
+                    lambda_opt, args)
 
         loss_track.append(loss)
         print(f'epoch: {epoch}, loss: {loss}')

@@ -2,11 +2,11 @@ import sys, os
 import torch
 import numpy as np
 from tqdm import tqdm
-
 from model import Unet
 from cat import sample
 from utils import cat2onehot, onehot2cat
 from plot import save_vis, make_gif
+
 
 @torch.no_grad()
 def cat_sample(model, T=1000, batch=8, save_path='sample.gif'):
@@ -34,10 +34,12 @@ def cat_sample(model, T=1000, batch=8, save_path='sample.gif'):
     # make gif
     make_gif(save_path)
 
+
 # sorts files alpha numerically (natural computer display)
 import re
 def natural_key(string_):
     return [int(s) if s.isdigit() else s for s in re.split(r'(\d+)', string_)]
+
 
 if __name__ == '__main__':
     # get newest model from f'results/model{num}.pt'

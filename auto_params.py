@@ -137,7 +137,8 @@ def get_Ot(x0, a, h, d, O_init=3., t_init=0.1, N=1000, epochs=5000):
     d = x0.shape[0]
     x0_a = x0[:-1] # case when k < d
     x0_b = x0_a.clone() # case when k = d
-    x0_b[0] = x0_b[1]
+    
+    #x0_b[0] = x0_b[1]
 
     # given a, d, and h: find O and t_min
     # we want to match mean to match x0 and var to be minimized 
