@@ -84,18 +84,25 @@ class CatProcess:
 
         return out 
 
-from dataloader import mnist_dataset
+from dataloader import mnist_dataset, text8_dataset
 
 # test noising process
 if __name__ == '__main__':
     k = 10; T = 500; 
-    data_type = 'image'
+    data_type = 'text'
     methods = ['uniform', 'gaussian']
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # get data  
-    loader = mnist_dataset(8, k)
+    if data_type == 'image':
+        loader = mnist_dataset(8, k)
+    elif data_type == 'text':
+        k = 27
+        loader = text8_dataset(8)
+
     (x, _) = next(iter(loader))
+    print(x)
+    sys.exit()
 
     for method in methods:
         x0 = x.clone().to(device)
