@@ -24,7 +24,7 @@ def sig(y, a):
 # generalized inverse sigmoid
 def sig_inv(x_, a):
     xd = a - x_.sum(dim=1, keepdim=True)
-    y = (x_/xd).log()
+    y = x._log() - xd.log()
     return y
 
 # score or grad log pdf
