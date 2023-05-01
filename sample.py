@@ -2,11 +2,38 @@ import sys, os
 import torch
 import numpy as np
 from tqdm import tqdm
+from einops import repeat, rearrange
 
 from process import sig, sig_inv
 from utils import save_path
 from model import Unet
 from plot import save_vis, make_gif
+
+# TODO: extend this to work with images
+# batched vector -> diagonal matrix with else c 
+def diag_d(X, c): # matrix x[b,k,h,w], scalar c
+    b, k, h, w = X.shape
+
+    # pattern to keep diagonal entries, else 1
+    E_ = torch.eye(k, device=X.device)
+    E = repeat(E_, 'i j -> b i j h w', b=b, h=h, w=w)
+    Y = torch.einsum('b i h w, b i j h w -> b i j h w', X-c, E)
+    Y = Y + c # do this to keep c on non-diagonal entries
+
+    return Y
+
+# batched vector -> repated matrix with c on diagonals 
+def diag_u(X, c): # matrix x[b,k,h,w], scalar c
+    b, k, h, w = X.shape
+    X_ = repeat(X-c, 'b k h w -> b k d h w', d=k)
+
+    # pattern to make diagonal entries c, else same
+    E_ = 1 - torch.eye(k, device=X.device)
+    E = repeat(E_, 'i j -> b i j h w', b=b, h=h, w=w)
+    Y = torch.einsum('b i h w, b i j h w -> b i j h w', X-c, E)
+    Y = Y + c # do this to keep c on non-diagonal entries
+
+    return Y
 
 '''
 score matching sampling from: https://arxiv.org/abs/2011.13456
@@ -31,33 +58,66 @@ class Sampler:
 
     # get intial distribution at t = t_max
     def init_sample(self):
-        var = 1/(2*self.h) * (1 - (-2*self.h * self.t_max).exp())
+        var = 1/(2*self.h) #* (1 - (-2*self.h * self.t_max).exp())
         sample = var.sqrt() * torch.randn(self.batch_size, self.k-1, *self.img_shape)
         x = sig(sample, self.a) 
         return x
 
-    # drift term
-    def f(self, x):
-        a = self.a
-        f1 = -self.h*sig_inv(x, a) * x*(1 - x/a)
-        f2 = 0.5*x*(1 - x/a) * (1 - 2*x/a)
-        return f1 + f2 
+    # jacobian term: x is [b,k-1,h,w]
+    # this is from equation _ in _
+    def jac(self, x):
+        f1 = self.a * repeat(x, 'b k h w -> b k d h w', d=self.k-1) 
+        f2 = diag_d(1-x, 1)
+        f3 = diag_u(x, 1)
 
-    # diffusion term
-    def g(self, x):
-        return x*(1-x/self.a)
+        J = f1 * f2 * f3
+        return J
+
+    # hessian term
+    # this is from equation _ in _
+    def hess(self, x):
+        f1 = self.a * x * (1-x)
+
+        m = diag_u(x, 0)
+        f = x * (1 - 2*x)
+        f2 = torch.einsum('b i j h w, b j h w -> b i h w', m, f)
+
+        h = f1 + f2
+        return h
+
+    # drift term and diffusion term
+    def f_g(self, x):
+        a = x.clone()
+        J = self.jac(x)
+        h = self.hess(x)
+
+        s = sig_inv(x, self.a)
+        f_ = torch.einsum('b i j h w, b j h w -> b i h w', J, s)
+
+        f = -self.h*f_ + 0.5*h # drift term
+        g = J # diffusion term
+
+        return f, g 
 
     def update_order(self, model, x, t, dt, order=1, g_scale=0.02):
         # get info for euler discretization of sde solution
-        f = self.f(x)
-        g = self.g(x)
-        eps = torch.randn(self.batch_size, self.k-1, *self.img_shape).to(self.device) 
-        score = model(x, t).squeeze() 
+        f, g = self.f_g(x)
+        print(f.max(), f.min(), g.max(), g.min())
+        sys.exit()
+
+        gs = torch.einsum('b i j h w, b j k h w -> b i k h w', g, g) # g^2
+        eps = torch.randn_like(x).to(self.device) 
+        score = model(x, t)
 
         # runge kutta solvers
         if order == 1:
-            update = (f + g**2 * score)*dt + g_scale*g*eps 
+            a = torch.einsum('b i j h w, b j h w -> b i h w', gs, score)
+            b = torch.einsum('b i j h w, b j h w -> b i h w', g, eps)
+            update = (f + a)*dt #+ g_scale*b
+
         elif order == 2:
+            raise NotImplementedError
+
             k1 = dt * (f + g**2 * score) # k1 is same as euler first order
             x1 = x + k1
             f1 = self.f(x1)
@@ -67,6 +127,7 @@ class Sampler:
             score1 = model(x1, t1).squeeze()
             k2 = dt * (f1 + g1**2 * score1)
             update = (k1+k2)/2 + g_scale*g1*eps 
+
         return update
             
 
@@ -79,8 +140,9 @@ class Sampler:
         x = self.init_sample().to(self.device)
 
         # select times for nn (always 0-1)
-        dt = torch.tensor([1/T]).to(self.device)
         t = torch.tensor([1.]).to(self.device)
+        t_norm = args.T[1] - args.T[0]
+        dt = t_norm * torch.tensor([1/T]).to(self.device)
 
         # noise schedule
         g_scale = np.linspace(0,1,T)[::-1]
@@ -92,14 +154,14 @@ class Sampler:
 
             # update x
             x += update
-            t -= dt
+            t -= dt / t_norm
 
             # save sample
             if save_path is not None:
-                x_save = x / self.a # map back to prob. simplex
+                x_save = x.clone()
                 # TODO: there should be a better way to do this...
                 update = self.a * (update - update.min()) / (update.max() - update.min())
-                save_vis([x_save, update], f'imgs/{int(i/d)}.png', k=self.k, a=self.a)
+                save_vis([x.clone(), update], f'imgs/{int(i/d)}.png', k=self.k, a=self.a)
 
         # discretize
         x = x.argmax(1)
@@ -113,21 +175,22 @@ class Sampler:
 import json
 import argparse
 if __name__ == '__main__':
-    name = 'general_mnist'
+    name = 'mnist10'
     path = os.path.join('results', name)
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # load json of args
     args = json.load(open(os.path.join(path, 'args.json'), 'r'))
     args = argparse.Namespace(**args)
 
     # load model
-    model = Unet(dim=64, channels=args.k-1).to('cuda')
+    model = Unet(dim=64, channels=args.k-1).to(device)
     model_path = os.path.join('results', name, f'model_{args.proc_name}.pt')
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval() 
     print(f'Loaded model from {model_path}')
 
     # print model name
     # sample from model
-    sampler = Sampler(args, batch_size=8, device='cuda')
+    sampler = Sampler(args, batch_size=8, device=device)
     sampler(model, T=1000, save_path=save_path(args, 'sample'))

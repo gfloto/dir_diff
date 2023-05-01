@@ -48,9 +48,11 @@ def cat_train(model, process, loader, opt, args):
         t = torch.randint(1, process.T, (1,)).to(device)
         xt = process.xt(x0, t.item())
 
-        # get correct score and predicted score
+        # p(x_t-1 | xt) ∝ sum_x0 q(x_t-1 | xt, x0) p(x0 | xt)
         pred = model(xt, t / process.T)
         log_pred = log_softmax(pred, dim=1)
+
+        # q(x_t-1 | xt, x0)
         q_rev = process.q_rev(x0, xt, t.item())
 
         # loss

@@ -22,14 +22,14 @@ see: https://arxiv.org/pdf/2107.03006.pdf
 '''
 
 class CatProcess:
-    def __init__(self, k, T, betas, method, device):
+    def __init__(self, k, T, method, data_type, device):
         self.k = k
         self.T = T
-        self.betas = betas
         self.method = method
-        self.data_type = 'image'
+        self.data_type = data_type
         self.device = device
 
+        self.betas = torch.linspace(1e-4, 0.02, T)
         self.Q_bar = self.Q_bar(T)
 
     # forward process
@@ -81,10 +81,7 @@ class CatProcess:
         denom = torch.einsum('bkhw, bkhw -> bhw', xt, mm(self.Q_bar[t], x0))
         denom = torch.stack(self.k*[denom], dim=1)
         out = num / denom
-        if not out.sum(dim=1).allclose(torch.ones_like(out.sum(dim=1))):
-            a = out.sum(dim=1)
-            print(t)
-            print(a[torch.where(a != 1)])
+
         return out 
 
 from dataloader import mnist_dataset
@@ -92,8 +89,8 @@ from dataloader import mnist_dataset
 # test noising process
 if __name__ == '__main__':
     k = 10; T = 500; 
-    methods = ['uniform', 'absorbing', 'gaussian', 'gaussian_vectorized']
-    betas = torch.linspace(1e-4, 0.02, T)
+    data_type = 'image'
+    methods = ['uniform', 'gaussian']
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # get data  
@@ -104,7 +101,7 @@ if __name__ == '__main__':
         x0 = x.clone().to(device)
 
         # get process
-        process = CatProcess(k, T, betas, method, device)
+        process = CatProcess(k, T, method, data_type, device)
 
         # test forward process
         r = 10

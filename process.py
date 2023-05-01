@@ -5,7 +5,7 @@ import numpy as np
 from einops import repeat
 import matplotlib.pyplot as plt
 
-from utils import onehot2cat, a_logit
+from utils import a_logit
 from plot import save_vis
 from dataloader import mnist_dataset
 
@@ -17,7 +17,7 @@ def sig(y, a):
 # generalized inverse sigmoid
 def sig_inv(x_, a):
     xd = a - x_.sum(dim=1, keepdim=True)
-    y = (x_/xd).log()
+    y = (x_).log() - (xd).log()
     return y
 
 '''

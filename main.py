@@ -62,6 +62,7 @@ if __name__ == '__main__':
         print(f'epoch: {epoch}, loss: {loss}')
 
         # save model
+        # TODO: track loss, only save if better...
         if epoch % 10 == 0:
             sp = save_path(args, f'model_{args.proc_name}_{epoch}.pt')
             torch.save(model.state_dict(), sp)
