@@ -25,6 +25,16 @@ class Onehot(object):
         x = one_hot(x, num_classes=self.k).type(torch.float32)
         return rearrange(x, 'h w k -> k h w')
 
+class OnehotRGB(object):
+    def __init__(self, k=10):
+        self.k = k
+
+    def __call__(self, x):
+        x *= self.k-1
+        x = torch.round(x).squeeze().type(torch.int64)  # remove channel dim
+        x = one_hot(x, num_classes=self.k).type(torch.float32)
+        return rearrange(x, 'c h w k -> c k h w')
+
 # return mnist dataset
 def mnist_dataset(batch_size, k, root='data/', num_workers=4, size=32):
     gray_transform = transforms.Compose([
@@ -37,6 +47,27 @@ def mnist_dataset(batch_size, k, root='data/', num_workers=4, size=32):
     mnist_loader = data.DataLoader(
         mnist_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     return mnist_loader
+
+def cifar10_dataset(batch_size, k, root='data/', num_workers=4, size=32):
+    transform = transforms.Compose([
+        transforms.Resize((size, size)),
+        transforms.ToTensor(),
+        OnehotRGB(k)
+    ])
+    cifar10_set = torchvision.datasets.CIFAR10(
+        root=root, train=True, download=True, transform=transform)
+    cifar10_loader = data.DataLoader(
+        cifar10_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    return cifar10_loader
+
+def test_cifar10_dataset():
+    batch_size = 4
+    k = 10
+    cifar10_loader = cifar10_dataset(batch_size, k)
+    data_iter = iter(cifar10_loader)
+    images, labels = next(data_iter)
+    assert images.shape == (batch_size, 3, k, 32, 32)
+    assert labels.shape == (batch_size,)
 
 # text8 dataset
 # data available at "http://mattmahoney.net/dc/text8.zip"
@@ -104,19 +135,20 @@ def text8_dataset(batch_size, num_workers=4, chunk_size=256):
 ###################################
 
 if __name__ == "__main__":
-    text8_test = Text8Dataset()
-    print(text8_test[0], text8_test[0].shape)
-    text8_test_loader = text8_dataset(32)
-    for batch in text8_test_loader:
-        print(batch.shape)
-        break
+    test_cifar10_dataset()
+    # text8_test = Text8Dataset()
+    # print(text8_test[0], text8_test[0].shape)
+    # text8_test_loader = text8_dataset(32)
+    # for batch in text8_test_loader:
+    #     print(batch.shape)
+    #     break
 
-    lm1b_test = LM1BDataset()
-    print(lm1b_test[0])
-    lm1b_test_loader = lm1b_dataset(32)
-    for batch in lm1b_test_loader:
-        print(batch.shape)
-        break
+    # lm1b_test = LM1BDataset()
+    # print(lm1b_test[0])
+    # lm1b_test_loader = lm1b_dataset(32)
+    # for batch in lm1b_test_loader:
+    #     print(batch.shape)
+    #     break
 
 # return dataset to main train and test framework
 def celeba_dataset(batch_size, num_workers=4, size=64):
