@@ -47,31 +47,6 @@ def plot(x, i, path):
     plt.savefig(path)
     plt.close()
 
-# batched vector -> diagonal matrix with else c 
-def diag_d(X, c): # matrix x[b,k,h,w], scalar c
-    b, k = X.shape
-
-    # pattern to keep diagonal entries, else 1
-    E_ = torch.eye(k, device=X.device)
-    E = repeat(E_, 'i j -> b i j', b=b)
-    Y = torch.einsum('b i, b i j -> b i j', X-c, E)
-    Y = Y + c # do this to keep c on non-diagonal entries
-
-    return Y
-
-# batched vector -> repated matrix with c on diagonals 
-def diag_u(X, c): # matrix x[b,k,h,w], scalar c
-    b, k = X.shape
-    X_ = repeat(X-c, 'b k -> b k d', d=k)
-
-    # pattern to make diagonal entries c, else same
-    E_ = 1 - torch.eye(k, device=X.device)
-    E = repeat(E_, 'i j -> b i j', b=b)
-    Y = torch.einsum('b i, b i j -> b i j', X-c, E)
-    Y = Y + c # do this to keep c on non-diagonal entries
-
-    return Y
-
 # OU process in gaussian space, mapped back to simplex
 class GProcess:
     def __init__(self, m0, theta, N):
@@ -87,19 +62,6 @@ class GProcess:
         sample = var.sqrt() * torch.randn(self.N, self.d) + mu
         return sig(sample)
 
-class OProcess:
-    def __init__(self, x0, theta):
-        self.theta = theta
-        self.d = x0.shape[0]
-        self.x = repeat(x0, 'd -> N d', N=N) 
-
-    def __call__(self, dt):
-        B = np.sqrt(dt) * torch.randn_like(self.x)
-        update = -self.theta*self.x*dt + B
-        self.x = self.x + update
-
-        return self.x
-
 # corresponding process on simplex
 class SProcess:
     def __init__(self, s0, theta, steps=10):
@@ -111,61 +73,55 @@ class SProcess:
     # -theta * grad^T sig^-1(S)dt + 0.5h
     # this steps s by dt! not the same as GProcess
     def __call__(self, dt):
-        jac = self.jac(self.s)
-        hess = self.hess(self.s)
-
-        # x and noise to be added
-        x = sig_inv(self.s)
-
-        # f from ds = f dt + g dB 
-        fx = torch.einsum('b i j, b j-> b i', jac, x)
-        f = -self.theta*fx + 0.5*hess
+        f = self.sde_f(self.s)
+        g = self.sde_g(self.s)
 
         # g from ds = f dt + g dB 
-        B = np.sqrt(dt) * torch.randn_like(self.s)
-        diff = torch.einsum('b i j, b j -> b i', jac, B) 
+        dB = np.sqrt(dt) * torch.randn_like(self.s)
 
         # update s
-        update = f*dt + diff
+        gdB = torch.einsum('b i j, b j -> b i', g, dB)
 
+        update = f*dt + gdB
         self.s = self.s + update
+
         return self.s
 
-    # make jac term for sde
-    def jac(self, s):
-        f1 = repeat(s, 'b k -> b k d', d=self.d) 
-        f2 = diag_d(1-s, 1)
-        f3 = rearrange(diag_u(-s, 1), 'b i j -> b j i')
+    # make drift term sde
+    def sde_f(self, s):
+        b, k = s.shape[:2]
 
-        J = f1 * f2 * f3
-        return J
+        x = sig_inv(self.s)
+        beta = -self.theta*x + 0.5*(1-2*s)
 
-    # make hess term for sde
-    def hess(self, s):
-        f1 = s * (1-s) * (1 - 2*s)
+        # \sum_{i \neq j} X_{ij}, vectorized
+        beta_v = repeat(s*beta, 'b d -> b k d', k=self.d)
+        I = repeat(torch.eye(k), 'i j -> b i j', b=b).to(s.device)
+        bsum = torch.einsum('b i j, b i j -> b i', 1-I, beta_v)
 
-        m = diag_u(s, 0)
-        b_ = s * (1 - 2*s)
-        b = repeat(b_, 'b k -> b k d', d=self.d)
-        b = rearrange(b, 'b i j -> b j i')
-        f2 = torch.einsum('b i j, b i j -> b j', m, b)
+        f = s * ( (1-s)*beta - bsum )
+        return f
 
-        #print(s)
-        #print(m)
-        #print(b)
-        #print(f2)
-        #sys.exit()
+    # make diffusion term sde
+    def sde_g(self, s):
+        b, k = s.shape[:2]
+        I = repeat(torch.eye(k), 'i j -> b i j', b=b).to(s.device)
 
-        h = f1 - f2
-        return h
+        neq = torch.einsum('b i, b j -> b i j', s, s)
+        eq = repeat(s*(1-s), 'b d -> b k d', k=self.d)
+
+        g1 = torch.einsum('b i j, b i j -> b i j', I, eq)
+        g2 = torch.einsum('b i j, b i j -> b i j', 1-I, neq)
+
+        g = g1 - g2
+        return g
 
 
 if __name__ == '__main__':
-    t1 = 0.5
-    T = 50; N = 1000; k = 4
+    t1 = 1
+    T = 50; N = 1000; k = 3
     theta = torch.rand(1)
     m0 = torch.randn(k-1)
-    #m0 = torch.tensor([1, 0.5, 0])
     s0 = sig(m0[None, ...])[0]
 
     sproc = SProcess(s0, theta)
