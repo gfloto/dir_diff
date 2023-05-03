@@ -24,9 +24,8 @@ class CategoricalDiffusionGrayscale(nn.Module):
         self.beta_values = beta_values
         self.ones = torch.ones(K, K)
         self.Q_t = self.compute_Q_t(T)
-        self.Q_bar_t = self.make_Q_bar(T)
-        self.Q_bar_t_m1 = self.make_Q_bar(T-1)
-        
+        self.Q_bar = self.make_Q_bar(T)
+                
     # Compute the Q_t matrix for a given timestep t
     # using the Uniform distribution defined in Appendix A.2.1
     def compute_Q_t(self, t):
@@ -37,15 +36,17 @@ class CategoricalDiffusionGrayscale(nn.Module):
     # Q_bar is q(x_t | x_0) (which is just Q_0 @ Q_1 @ ...)
     # DONE: move this to a tensor of self.Q_bar: shape [T, k, k]
     def make_Q_bar(self, t):
+        result_tensor = torch.empty((t, self.K, self.K))
         bar_Q_t = torch.eye(self.K)
         for i in range(t):
             bar_Q_t = bar_Q_t @ self.compute_Q_t(i)
-        return bar_Q_t
+            result_tensor[i] = bar_Q_t
+        return result_tensor
 
-    # DONE: q(x_{t-1} | x_t, x_0) = q(x_{t-1} | x_t) = q(x_t | x_{t-1}) = Q_t @ x_{t-1}
+    # DONE: q(x_{t} | x_{t-1}, x_0) =q(x_{t} | x_{t-1}) = Q_t @ x_{t-1}
     # see equation 3
     def make_Q_rev(self, x0, t):
-        x_t_m1 = self.forward_diffusion(x0, t-1)
+        x_t_m1 = self.forward_diffusion(x0, self.Q_bar[t-2]) # self.Q_bar is zero-indexed so x_{t-1} is at index t-2
         q_rev = self.Q_t @ x_t_m1
         return q_rev
 
@@ -55,22 +56,17 @@ class CategoricalDiffusionGrayscale(nn.Module):
     # thus, Q_t, and Q_bar_t should be stored in the class and never re-computed
 
     # Add noise to the image x0 using the forward diffusion process
-    def forward_diffusion(self, x0, time):
-        if time == self.T:
-            p = torch.matmul(x0, self.Q_bar_t) # ie. probability that you're in state xt given x0
-            # Sample directly from the categorical distribution
-            x_t = dist.Categorical(p).sample()
-            return x_t
-        elif time == self.T-1:
-            p = torch.matmul(x0, self.Q_bar_t_m1) # ie. probability that you're in state xt given x0
-            x_t_m1 = dist.Categorical(p).sample()
-            return x_t_m1
+    def forward_diffusion(self, x0, Q_bar):
+        p = torch.matmul(x0, Q_bar) # ie. probability that you're in state xt given x0
+        # Sample directly from the categorical distribution
+        x = dist.Categorical(p).sample()
+        return x
+
     
+    # q(x_{t-1}|x_t, x_0)
     def create_q_tm_1(self, x0, t):
         q_rev = self.make_Q_rev(x0, t)
-        q_xt_m1 = self.forward_diffusion(x0, t-1)
-        q_xt_given_x0 = self.forward_diffusion(x0, t)
-        return (q_rev @ q_xt_m1) / q_xt_given_x0
+        return (q_rev @ self.Q_bar[t-2]) / self.Q_bar[t-1] # self.Q_bar is zero-indexed so x_{t} is at index t-1
 
     def reverse(self, x, t):
         # Run each image through the network for each timestep t in the vector t.
@@ -82,7 +78,7 @@ class CategoricalDiffusionGrayscale(nn.Module):
         # Apply forward diffusion process
         
         # we have this code, but it can be written more clearly
-        xt = self.forward_diffusion(x0, t) # use self.Q_bar (apply matrix mult and use basic torch sampler)
+        xt = self.forward_diffusion(x0, self.Q_bar[t-1]) # use self.Q_bar (apply matrix mult and use basic torch sampler)
         
         # we don't have this code...
         # this is used directly in the loss
@@ -91,41 +87,13 @@ class CategoricalDiffusionGrayscale(nn.Module):
         
         # p_theta(x_{t-1} | x_t, t)
         # this is also a probability distribution
-        out = self.model(xt, t) # this prediction is the sample shape as q_tm1
+        out = self.reverse(xt, t) # this prediction is the sample shape as q_tm1
         
         # now perform the kld divergence (this is the loss)
-        kld = torch.sum( q_tm1 * torch.log(q_tm1/self.reverse(xt, t)))
+        kld = torch.sum( q_tm1 * torch.log(q_tm1/out))
         return kld
         # return kld (this is the loss)
         
-        # #opt = some pytorch optimizer(model.params, learning_rate=lr)
-        
-        # opt.zero_grad()
-        # x = dataloader.givemeabatch()
-        # loss = train(x) # this is the kld you made!
-        
-        # loss.backwards()
-        # opt.step() # this updates your model (ie. learning!)
-    
-    # def _gumbel_softmax_sample(self, logits, tau):
-    #     gumbel_noise = -torch.log(-torch.log(torch.rand_like(logits)))
-    #     y = logits + gumbel_noise
-    #     return torch.nn.functional.softmax(y / tau, dim=-1)
-    
-    
-    # def simple_loss(self, x, x0, t):
-    #     eps_theta = self.reverse(x, t)
-    #     if noise is None:
-    #         noise = torch.randn_like(x0)
-    #     return nn.MSELoss(eps_theta, noise)
-    
-    # def loss(self, x, x0, t, _lambda, aux_loss = True):
-    #     neg_vae_lb = self.simple_loss(x, x0, t)
-    #     aux_loss = -_lambda * torch.log(self.reverse(x, t))
-    #     loss = neg_vae_lb + aux_loss
-    #     if aux_loss == False:
-    #         loss = neg_vae_lb
-    #     return loss
 
 
 

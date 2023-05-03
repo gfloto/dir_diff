@@ -1,6 +1,7 @@
 import sys, os
 import argparse
 import torch
+import math
 import numpy as np
 from einops import rearrange
 from torch.nn.functional import one_hot
@@ -11,12 +12,12 @@ from matplotlib.image import NonUniformImage
 def get_args():
     parser = argparse.ArgumentParser()
     # add exp name
-    parser.add_argument('--exp', type=str, default='dev', help='experiment name')
+    parser.add_argument('--exp', type=str, default='general_mnist', help='experiment name')
     parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
     parser.add_argument('--proc_name', type=str, default='simplex', help='process name')
     parser.add_argument('--batch_size', type=int, default=64, help='batch size')
     parser.add_argument('--epochs', type=int, default=500, help='number of epochs')
-    parser.add_argument('--k', type=int, default=3, help='number of categories')
+    parser.add_argument('--k', type=int, default=10, help='number of categories')
     parser.add_argument('--pad', type=float, default=3., help='padding for simplex')
     parser.add_argument('--dist', type=float, default=9., help='distance on simplex between x_tmin and x_tmax')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
@@ -37,10 +38,10 @@ def a_logit(x, a):
     return x.log() - (a-x).log()
 
 def onehot2cat(x, k):
-    return torch.argmax(x, dim=1) / (k-1)
+    return torch.argmax(x, dim=1)
 
 def cat2onehot(x, k):
-    x = one_hot(x * (k-1), k).float() 
+    x = one_hot(x, k).float() 
     return rearrange(x, 'b h w k -> b k h w')
 
 # useful torch -> numpy
@@ -95,3 +96,19 @@ class InfoLogger:
         # save figure
         plt.savefig(path)
         plt.close()
+
+def calculate_perplexity(model, data):
+    """
+    Calculates the perplexity of a language model on a given dataset.
+    :param model: The language model to evaluate.
+    :param data: The dataset to evaluate the model on.
+    :return: The perplexity of the model of the dataset.
+    """
+    total_log_prob = 0
+    num_words = 0
+    for sentence in data:
+        log_prob = model(sentence)
+        total_log_prob += log_prob
+        num_words += len(sentence)
+    perplexity = math.exp(total_log_prob / num_words)
+    return perplexity
