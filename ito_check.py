@@ -68,7 +68,7 @@ class SProcess:
         self.steps = steps
         self.theta = theta
         self.d = s0.shape[0]
-        self.s = repeat(s0, 'd -> N d', N=N) 
+        self.s = repeat(s0, 'd -> N d w h', N=N, w=5, h=5) 
     
     # -theta * grad^T sig^-1(S)dt + 0.5h
     # this steps s by dt! not the same as GProcess
@@ -80,7 +80,7 @@ class SProcess:
         dB = np.sqrt(dt) * torch.randn_like(self.s)
 
         # update s
-        gdB = torch.einsum('b i j, b j -> b i', g, dB)
+        gdB = torch.einsum('b i j ..., b j ... -> b i ...', g, dB)
 
         update = f*dt + gdB
         self.s = self.s + update
@@ -89,29 +89,29 @@ class SProcess:
 
     # make drift term sde
     def sde_f(self, s):
-        b, k = s.shape[:2]
+        b, k, w, h = s.shape
 
         x = sig_inv(self.s)
         beta = -self.theta*x + 0.5*(1-2*s)
 
         # \sum_{i \neq j} X_{ij}, vectorized
-        beta_v = repeat(s*beta, 'b d -> b k d', k=self.d)
-        I = repeat(torch.eye(k), 'i j -> b i j', b=b).to(s.device)
-        bsum = torch.einsum('b i j, b i j -> b i', 1-I, beta_v)
+        beta_v = repeat(s*beta, 'b d ... -> b k d ...', k=self.d)
+        I = repeat(torch.eye(k), 'i j -> b i j w h', b=b, w=w, h=h).to(s.device)
+        bsum = torch.einsum('b i j ..., b i j ... -> b i ...', 1-I, beta_v)
 
         f = s * ( (1-s)*beta - bsum )
         return f
 
     # make diffusion term sde
     def sde_g(self, s):
-        b, k = s.shape[:2]
-        I = repeat(torch.eye(k), 'i j -> b i j', b=b).to(s.device)
+        b, k, w, h = s.shape
+        I = repeat(torch.eye(k), 'i j -> b i j w h', b=b, w=w, h=h).to(s.device)
 
-        neq = torch.einsum('b i, b j -> b i j', s, s)
-        eq = repeat(s*(1-s), 'b d -> b k d', k=self.d)
+        neq = torch.einsum('b i ..., b j ... -> b i j ...', s, s)
+        eq = repeat(s*(1-s), 'b d ... -> b k d ...', k=self.d)
 
-        g1 = torch.einsum('b i j, b i j -> b i j', I, eq)
-        g2 = torch.einsum('b i j, b i j -> b i j', 1-I, neq)
+        g1 = torch.einsum('b i j ..., b i j ... -> b i j ...', I, eq)
+        g2 = torch.einsum('b i j ..., b i j ... -> b i j ...', 1-I, neq)
 
         g = g1 - g2
         return g
@@ -134,7 +134,8 @@ if __name__ == '__main__':
         gxt = gproc(t[i])
 
         # plot together to compare
-        plot([gxt, sxt], i, f'imgs/{i}.png')
+        q = np.random.choice(2, 5, replace=True)
+        plot([gxt, sxt[:,:,q[0],q[1]]], i, f'imgs/{i}.png')
 
     make_gif('imgs', 'ito_check.gif', T)
 
