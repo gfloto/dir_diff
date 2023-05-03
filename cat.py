@@ -30,7 +30,7 @@ class CatProcess:
         self.data_type = 'image'
         self.device = device
 
-        self.Q_bar = self.Q_bar(T)
+        self.Q_bar = self.Q_bar(T).to(self.device)
 
     # forward process
     def xt(self, x0, t):
@@ -62,7 +62,16 @@ class CatProcess:
                     if i != j:
                         Qt[i, j] = torch.exp(-4 * (i - j) ** 2 / ((self.k - 1) ** 2 * beta_t)) / normalization
             Qt[range(self.k), range(self.k)] = 1 - Qt.sum(dim=1)
-        #elif method == "gaussian_vectorized":
+        elif method == "gaussian_vectorized":
+            beta_t = self.betas[t]
+            Qt = torch.zeros(self.k, self.k)
+            beta_t = torch.tensor(beta_t)
+            normalization = torch.sum(torch.exp(-4 * (torch.arange(-(self.k - 1), self.k) ** 2) / ((self.k - 1) ** 2 * beta_t)))
+            i, j = torch.meshgrid(torch.arange(self.k), torch.arange(self.k))
+            Qt = torch.exp(-4 * (i - j) ** 2 / ((self.k - 1) ** 2 * beta_t)) / normalization
+            Qt[range(self.k), range(self.k)] = 0
+            Qt[range(self.k), range(self.k)] = 1 - Qt.sum(dim=1)
+        return Qt.to(self.device)
 
     # Q_bar is q(x_t | x_0) (which is just Q_1 @ Q_2 @ ...)
     def Q_bar(self, t):
