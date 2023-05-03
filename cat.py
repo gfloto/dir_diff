@@ -6,6 +6,9 @@ from einops import rearrange
 from plot import save_vis, make_gif
 from utils import cat2onehot
 
+from sklearn.neighbors import NearestNeighbors
+import numpy as np
+
 # useful sampling function
 def sample(q, k):
     q = rearrange(q, 'b k h w -> b h w k')
@@ -40,7 +43,7 @@ class CatProcess:
         return xt
 
     # compute Qt transition matrix 
-    def Q(self, t, method="uniform"):
+    def Q(self, t, method="uniform", embeddings = None, alphas=None):
         if method == "uniform":
             b = self.betas[t]; k = self.k
             Qt = (1-b) * torch.eye(k) + b*torch.ones(k,k) / k
@@ -71,6 +74,29 @@ class CatProcess:
             Qt = torch.exp(-4 * (i - j) ** 2 / ((self.k - 1) ** 2 * beta_t)) / normalization
             Qt[range(self.k), range(self.k)] = 0
             Qt[range(self.k), range(self.k)] = 1 - Qt.sum(dim=1)
+        elif method == "kNN":
+            # Compute the pairwise distances between all words in the embedding space
+            distances = torch.cdist(embeddings, embeddings)
+
+            # Find the k-nearest neighbors of each word
+            # Exclude the first nearest neighbor, which is the word itself
+            knn = distances.topk(k=k+1, dim=1, largest=False).indices[:, 1:]
+
+            # Construct the k-nearest neighbor adjacency matrix
+            n_words = embeddings.shape[0]
+            G = torch.zeros((n_words, n_words))
+            G.scatter_(1, knn, 1)
+
+            # Symmetrize the adjacency matrix
+            A = (G + G.T) / (2 * k)
+
+            # Construct the rate matrix R by modifying A directly
+            A[range(n_words), range(n_words)] = -A.sum(dim=1)
+
+            # Compute the transition matrix using a matrix exponential
+            alpha_t = alphas[t]
+            Qt = torch.matrix_exp(alpha_t * A)
+
         return Qt.to(self.device)
 
     # Q_bar is q(x_t | x_0) (which is just Q_1 @ Q_2 @ ...)
@@ -93,6 +119,19 @@ class CatProcess:
             print(t)
             print(a[torch.where(a != 1)])
         return out 
+    
+    def compute_knn_adjacency_matrix(self, embeddings, k):
+        # Compute the k-nearest neighbors of each word in the embedding space
+        nbrs = NearestNeighbors(n_neighbors=k, algorithm='ball_tree').fit(embeddings)
+        distances, indices = nbrs.kneighbors(embeddings)
+        
+        # Construct the k-nearest neighbor adjacency matrix
+        n_words = embeddings.shape[0]
+        G = np.zeros((n_words, n_words))
+        for i in range(n_words):
+            G[i, indices[i]] = 1
+        
+        return G
     
 
 def test_gaussian_case(K, beta_values):
