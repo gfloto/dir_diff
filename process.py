@@ -5,18 +5,17 @@ import numpy as np
 from einops import repeat
 import matplotlib.pyplot as plt
 
-from utils import a_logit
 from plot import save_vis
 from dataloader import mnist_dataset
 
 # TODO: these transformations are biased!!
-def sig(y, a):
-    x_ = a * y.exp() / (1 + y.exp().sum(dim=1, keepdim=True))
+def sig(y):
+    x_ = y.exp() / (1 + y.exp().sum(dim=1, keepdim=True))
     return x_
 
 # generalized inverse sigmoid
 def sig_inv(x_, a):
-    xd = a - x_.sum(dim=1, keepdim=True)
+    xd = 1 - x_.sum(dim=1, keepdim=True)
     y = (x_).log() - (xd).log()
     return y
 
@@ -26,12 +25,12 @@ main diffusion process class
 
 class Process:
     def __init__(self, args):
-        self.h = torch.tensor(args.h).to(args.device)
-        self.a = torch.tensor(args.a).to(args.device)
-        self.t_min, self.t_max = args.T
-        self.Oa, self.Ob = args.O
+        self.O = args.O
+        self.t_min = args.t_min
+        self.t_max = args.t_max
+        self.theta = torch.tensor(args.theta).to(args.device)
 
-        self.d = args.k
+        self.k = args.k
         self.device = args.device
 
     # get t, rescale to be in proper interval
@@ -42,41 +41,31 @@ class Process:
 
     # mean and variance of OU process at time t
     def xt(self, x0, t):
-        d = x0.shape[1]
-        O = x0[:, :-1]
-
         # convert from S -> O
-        # make Oa if cat is d-1 classes
-        O *= self.Oa
+        O_ = x0[:, :-1]
+        O_ *= self.O # this is one-hot * O
 
-        # make Ob is cat is d class
-        con = O.sum(dim=1, keepdim=True).repeat(1, d-1, 1, 1)
-        O = torch.where(con == 0, self.Ob, O)
+        # make [-O, -O, ...] is cat is kth class
+        ksum = repeat(O_.sum(dim=1), 'b ... -> b k ...', k=self.k-1)
+        O = torch.where(ksum == 0, -self.O, O_)
 
         # get mean and variance of OU process
-        mu = (-self.h * t).exp() * O
-        var = 1/(2*self.h) * (1 - (-2*self.h * t).exp())
+        mu = (-self.theta * t).exp() * O
+        var = 1/(2*self.theta) * (1 - (-2*self.theta * t).exp())
 
         # sample in R, then map to simplex
         sample = var.sqrt() * torch.randn_like(O) + mu
-        xt = sig(sample, self.a)
+        xt = sig(sample)
         return xt, mu, var
 
     # compute score
-    def score(self, x, mu, var):
-        assert x.shape[1] == self.d-1
-
-        # x_ -> x
-        xd = self.a - x.sum(dim=1, keepdim=True)
-        x = torch.cat((x, xd), dim=1)
-
-        # sig_a_inv of normal
-        x_ = x[:, :-1]
-        xd = x[:, -1].unsqueeze(1)
+    def score(self, x_, mu, var):
+        # get last component
+        xd = 1 - x_.sum(dim=1, keepdim=True)
 
         # constant factor
         c1 = 1/(xd.squeeze()) * (x_.log() - xd.log() - mu).sum(dim=1)
-        c1 = repeat(c1, 'b h w-> b k h w', k=self.d-1)
+        c1 = repeat(c1, 'b ... -> b k ...', k=self.k-1)
 
         # unique element-wise factor
         c2 = 1/(x_) * (x_.log() - xd.log() - mu)

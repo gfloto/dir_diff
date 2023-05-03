@@ -1,6 +1,7 @@
 import os, sys
 import torch
-import argparse
+import json
+import pickle
 import numpy as np
 from einops import repeat
 import matplotlib.pyplot as plt
@@ -9,7 +10,7 @@ from tqdm import tqdm
 from utils import get_args
 from plot import make_gif
 
-from utils import onehot2cat, a_logit
+from utils import onehot2cat
 from plot import save_vis
 from dataloader import mnist_dataset
 
@@ -84,7 +85,7 @@ def get_theta(k, theta_init=5., sig3=0.1, N=1000, eps=1e-4, epochs=5000):
         # for exit
         delta = loss.item()
         if delta < eps:
-            return theta.detach()
+            return theta.detach().item()
 
     # throw error if not converged
     raise ValueError(f'h did not converge after {epochs} iters')
@@ -153,10 +154,10 @@ def get_Ot(s0, theta, k, O_init=3., t_init=0.1, N=1000, epochs=5000):
         if len(loss_track) > 100:
             loss_track.pop(0)
         if loss_track[-1] > loss_track[0]:
-            print(f'case 1: {m[0].detach().numpy()}')
-            print(f'case 2: {m[1].detach().numpy()}')
-            print(f'std: {std.mean().detach()}')
-            return Oa.detach(), t_min.detach()# , [m.detach(), v.detach(), sc.detach()]
+            #print(f'case 1: {m[0].detach().numpy()}')
+            #print(f'case 2: {m[1].detach().numpy()}')
+            #print(f'std: {std.mean().detach()}')
+            return Oa.detach().item(), t_min.detach().item()
 
         # no negative values allowed
         t_min.data = torch.clamp(t_min, min=1e-5)
@@ -191,13 +192,63 @@ def get_tmax(O, theta, k, t_init=1., N=1000, eps=1e-2, epochs=5000):
         if len(loss_track) > 100:
             loss_track.pop(0)
         if loss_track[-1] > loss_track[0]:
-            print(1-mean.sum().detach().item())
-            print(mean.detach().numpy())
-            return t_max.detach()
+            #print(1-mean.sum().detach().item())
+            #print(mean.detach().numpy())
+            return t_max.detach().item()
 
     # throw error if not converged
     raise ValueError(f'h did not converge after {epochs} iters')
 
+# check for previous solved args
+def param_check(k, cat_mag, args):
+    os.makedirs('params', exist_ok=True)
+
+    # check for previous solved args
+    fname = f'params/k-{k}_cat-{cat_mag}.json'
+    if os.path.exists(fname):
+        with open(fname, 'r') as f:
+            params = json.load(f)
+            args.theta = params['theta']
+            args.O = params['O']
+            args.t_min = params['t_min']
+            args.t_max = params['t_max']
+            return args
+    else:
+        return None
+
+# get params s.t. the process is all nice and tidy
+def auto_param(args):
+    k = args.k
+    cat_mag = 0.9
+
+    # check for previous solved args
+    out = param_check(k, cat_mag, args)
+    if out is not None:
+        print('using previous params')
+        return out
+    print('getting new params')
+
+    # set initial value
+    S0 = torch.zeros(k-1) + (1 - cat_mag)/(k-1)
+    S0[0] = cat_mag
+
+    # get params
+    theta = get_theta(k, sig3=0.1)
+    O, t_min = get_Ot(S0, theta, k)
+    t_max = get_tmax(O, theta, k)
+
+    # save params
+    fname = f'params/k-{k}_cat-{cat_mag}.json'
+    with open(fname, 'w') as f:
+        json.dump({'theta': theta, 'O': O, 't_min': t_min, 't_max': t_max}, f)
+
+    # set args
+    args.theta = theta
+    args.O = O
+    args.t_min = t_min
+    args.t_max = t_max
+
+    return args
 
 if __name__ == '__main__':
     k=10; cat_mag=0.9

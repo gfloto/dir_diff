@@ -18,7 +18,6 @@ from utils import InfoLogger, save_path, get_args
 def save_args(args):
     # save args as json
     args_dict = vars(args)
-    args_dict['T'] = list(args_dict['T'])
     os.makedirs(args.exp, exist_ok=True)
     with open(save_path(args, 'args.json'), 'w') as f:
         json.dump(args_dict, f)
@@ -27,35 +26,45 @@ if __name__ == '__main__':
     args = get_args()
     args.exp = os.path.join('results', args.exp)
 
-    # get process params
-    args = auto_param(args) 
+    # get process param for simplex diffusion
+    if args.proc_type == 'simplex':
+        args = auto_param(args) 
+
+    # save and print args
     save_args(args)
     print(f'device: {args.device}')
-    print(f'a: {args.a:.4f}, h: {args.h:.4f}, t-min: {args.T[0]:.4f}, t-max: {args.T[1]:.4f}')
+    print(f'theta: {args.theta:.4f}, O: {args.O}, t-min: {args.t_min:.4f}, t-max: {args.t_max:.4f}')
 
-    # load dataset, model, optimizer and process
-    loader = text8_dataset(batch_size=args.batch_size)
-    # loader = mnist_dataset(args.batch_size, args.k)
-    ch = args.k if args.proc_name == 'cat' else args.k-1
+    # load dataset
+    if args.dataset == 'text8':
+        loader = text8_dataset(batch_size=args.batch_size)
+    elif args.dataset == 'mnist':
+        loader = mnist_dataset(args.batch_size, args.k)
+    elif args.dataset == 'cifar10':
+        # TODO: get this working
+        raise ValueError(f'not implemented yet: {args.dataset}')
+
+    # load model and optimizer
+    ch = args.k if args.proc_type == 'cat' else args.k-1
     model = Unet(dim=64, channels=ch).to(args.device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     logger = InfoLogger()
 
-    # get process
-    if args.proc_name == 'cat':
-        T = 1000
-        betas = torch.linspace(1e-4, 0.02, T)
+    # load process
+    if args.proc_type == 'cat':
+        # TODO: make this args parameters?
+        betas = torch.linspace(1e-4, 0.02, 1000)
         process = CatProcess(args.k, T, betas, args.device)
-    elif args.proc_name == 'simplex':
+    elif args.proc_type == 'simplex':
         process = Process(args)
 
     # train loop
     loss_track = []
     for epoch in range(args.epochs):
         logger.clear()
-        if args.proc_name == 'simplex':
+        if args.proc_type == 'simplex':
             loss = train(model, process, loader, opt, logger, args)
-        elif args.proc_name == 'cat':
+        elif args.proc_type == 'cat':
             loss = cat_train(model, process, loader, opt, args)
 
         loss_track.append(loss)

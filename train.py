@@ -9,7 +9,6 @@ from tqdm import tqdm
 from utils import ptnp
 from plot import save_vis
 
-
 def train(model, process, loader, opt, logger, args):
     device = args.device; k = args.k
     model.train()
