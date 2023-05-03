@@ -136,7 +136,7 @@ def cat_train(model, process, loader, opt, args, lmbda=0.01):
         xhatt = process.xt(q_rev, t.item())
         #aux_out = aux_model(normalize(onehot_to_int(xhatt), xhatt.shape[-1]), t.item())
         q_rev_hat = process.q_rev(q_rev, xhatt, t.item())
-        aux_loss = cross_entropy(q_rev_hat, onehot_to_int(q_rev))
+        #aux_loss = cross_entropy(q_rev_hat, onehot_to_int(q_rev))
         # TODO move to cat.py
         #torch.sum(q_rev_hat * (q_rev_hat.log() - q_rev.log()), dim=(1))
         # logistic_params = get_logistic_params(aux_out)
@@ -144,7 +144,7 @@ def cat_train(model, process, loader, opt, args, lmbda=0.01):
         # muprime = aux_out[..., num_classes:]
         # loc = torch.tanh(normalize(onehot_to_int(xhatt)) + muprime)
         # logits = get_logits_from_logistic_pars(loc, log_scale, num_classes)
-        # aux_loss = cross_entropy(logits, onehot_to_int(q_rev))
+        aux_loss = cross_entropy(logits, onehot_to_int(q_rev))
 
         loss = loss.mean() + lmbda*aux_loss
 
