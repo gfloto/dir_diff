@@ -34,7 +34,7 @@ def mnist_dataset(batch_size, k, root='data/', num_workers=4, size=32):
     gray_transform = transforms.Compose([
         transforms.ToTensor(), 
         #transforms.Grayscale(),
-        transforms.Resize((size, size), antialias=True),
+        transforms.Resize((size, size)),# antialias=True),
         Onehot(k)])
     mnist_set = torchvision.datasets.MNIST(
         root=root, train=True, download=True, transform=gray_transform)

@@ -34,16 +34,15 @@ if __name__ == '__main__':
     save_args(args)
     print(f'device: {args.device}')
     print(f'a: {args.a:.4f}, h: {args.h:.4f}, t-min: {args.T[0]:.4f}, t-max: {args.T[1]:.4f}')
-
     # load dataset, model, optimizer and process
-    loader = text8_dataset(batch_size=args.batch_size)
-    # loader = mnist_dataset(args.batch_size, args.k)
+    #loader = text8_dataset(batch_size=args.batch_size)
+    loader = mnist_dataset(args.batch_size, args.k)
     ch = args.k if args.proc_name == 'cat' else args.k-1
     model = Unet(dim=64, channels=ch).to(args.device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
-    if args.proc_name == 'cat':
-        aux_model = Unet(dim=64, channels=ch).to(args.device)
-        aux_opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+    #if args.proc_name == 'cat':
+    #    aux_model = Unet(dim=64, channels=ch).to(args.device)
+    #    aux_opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     logger = InfoLogger()
 
     # get process
@@ -62,11 +61,9 @@ if __name__ == '__main__':
             loss = train(model, process, loader, opt, logger, args)
         elif args.proc_name == 'cat':
             loss = cat_train(model, 
-                             aux_model, 
                              process, 
                              loader, 
                              opt,
-                             aux_opt, 
                              args)
 
         loss_track.append(loss)

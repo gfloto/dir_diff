@@ -64,7 +64,7 @@ def get_logits_from_logistic_pars(loc, log_scale, num_classes):
     # The loc and log_scale are assumed to be modeled for data re-scaled
     # such that the values {0, ...,K-1} map to the interval [-1, 1].
     loc = loc.unsqueeze(-1)
-    log_scale = log_scale.unsqueeze(-1)
+    log_scale = log_scale.unsqueeze(-1)
 
     # Shift log_scale such that if it’s zero the output distribution
     # has a reasonable variance.
@@ -102,16 +102,11 @@ def log_minus_exp(a, b, epsilon=1.e-6):
     return a + torch.log1p(-torch.exp(b - a) + epsilon)
 
 
-#def get_logistic_params(aux_out):
-    
-
-
-
-def cat_train(model, aux_model, process, loader, opt, aux_opt, args, lmbda=0.01):
+def cat_train(model, process, loader, opt, args, lmbda=0.01):
     device = args.device; k = args.k
     model.train()
     loss_track = []
-    for i, x0 in enumerate(tqdm(loader)):
+    for i, (x0,_) in enumerate(tqdm(loader)):
         # 
         #
         # STEP 1 ; Train Score Function Model
@@ -131,22 +126,26 @@ def cat_train(model, aux_model, process, loader, opt, aux_opt, args, lmbda=0.01)
         
         # We have vb_loss = L1 + L2 + L3 
         # Where 
-        # L1 = \E_{q(x_0)}[D_{KL}[ q(x_T|x_0) | p(x(T)) ]]         
+        # L1 = \E_{q(x_0)}[D_{KL}[ q(x_T|x_0) | p(x(T)) ]]       
         # L2 = sum_t=2^T \E_{q(xt|x0)}[D_{KL}[q(x_{t-1} | x_t, x_0)|p_\theta(x_{t-1} | x_t)]
         # L3 = -\E_{q(x_1|x_0)}[log p_\theta (x_0 | x_1)]
-        # It is known that this can be expressed in terms of:
+        # It is known that this can be expressed in terms of
         vb_loss = torch.sum(q_rev * (q_rev.log() - log_pred), dim=(1))
         
         # L_aux is given by considering outputs of the q process
-        xhatt = process.xt(q_rev, xt, t.item())
-        aux_out = aux_model(normalize(onehot_to_int(xhatt), xhatt.shape[-1]), t.item())
+        xhatt = process.xt(q_rev, t.item())
+        #aux_out = aux_model(normalize(onehot_to_int(xhatt), xhatt.shape[-1]), t.item())
+        q_rev_hat = process.q_rev(q_rev, xhatt, t.item())
+        aux_loss = cross_entropy(q_rev_hat, onehot_to_int(q_rev))
+        # TODO move to cat.py
+        #torch.sum(q_rev_hat * (q_rev_hat.log() - q_rev.log()), dim=(1))
+        # logistic_params = get_logistic_params(aux_out)
+        # log_scale = aux_out[..., :num_classes]
+        # muprime = aux_out[..., num_classes:]
+        # loc = torch.tanh(normalize(onehot_to_int(xhatt)) + muprime)
+        # logits = get_logits_from_logistic_pars(loc, log_scale, num_classes)
+        # aux_loss = cross_entropy(logits, onehot_to_int(q_rev))
 
-        logistic_params = get_logistic_params(aux_out)
-        log_scale = aux_out[..., :num_classes]
-        muprime = aux_out[..., num_classes:]
-        loc = torch.tanh(normalize(onehot_to_int(xhatt)) + muprime)
-        ogits = get_logits_from_logistic_pars(loc, log_scale, num_classes)
-        aux_loss = cross_entropy(logits, onehot_to_int(q_rev))
         loss = loss.mean() + lmbda*aux_loss
 
         # backward pass
@@ -155,34 +154,5 @@ def cat_train(model, aux_model, process, loader, opt, aux_opt, args, lmbda=0.01)
         opt.step()
 
         loss_track.append(ptnp(loss))
-        # 
-        #
-        # STEP 2 ; Train Auxillary Reconstruction Model
-        #
-        #
-        t = torch.randint(1, process.T, (1,)).to(device)
-        xt = process.xt(x0, t.item())
-
-        q_rev = process.q_rev(x0, xt, t.item())
-
-        assert q_rev.sum(dim=1).allclose(torch.ones_like(q_rev.sum(dim=1)))
-        assert pred.sum(dim=1).allclose(torch.ones_like(pred.sum(dim=1))) 
-        
-        # L_aux is given by considering outputs of the q process
-        xhatt = process.xt(q_rev, xt, t.item())
-        aux_out = aux_model(normalize(onehot_to_int(xhatt), xhatt.shape[-1]), t.item())
-
-        logistic_params = get_logistic_params(aux_out)
-        log_scale = aux_out[..., :num_classes]
-        muprime = aux_out[..., num_classes:]
-        loc = torch.tanh(normalize(onehot_to_int(xhatt)) + muprime)
-        logits = get_logits_from_logistic_pars(loc, log_scale, num_classes)
-        aux_loss = cross_entropy(logits, onehot_to_int(q_rev))
-
-        # backward pass
-        aux_opt.zero_grad()
-        aux_loss.backward()
-        aux_opt.step()
-
 
     return np.mean(loss_track)
