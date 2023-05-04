@@ -43,17 +43,13 @@ class Sampler:
         x = sig(sample) 
         return x
 
-    # TODO: re-impliment RK2
     # backward: dx = [f(x,t) - g(x)^2 score_t(x)]dt + g(t)dB
-    def update_order(self, model, x, t, dt):
+    # TODO: re-impliment RK2
+    def update(self, model, x, t, dt, g_scale=1):
         # get f, g, g^2 score and dB
         f = self.process.sde_f(x)
         g = self.process.sde_g(x)
-        score = model(x, t)
-        #g2_score = model(x, t)
-
-        g2 = torch.einsum('b i j ..., b j k ... -> b i k ...', g, g)
-        g2_score = torch.einsum('b i j ..., b j ... -> b i ...', g2, score)
+        g2_score = model(x, t)
 
         # check f is not nan
         assert torch.isnan(f).sum() == 0, f'f is nan: {f}'
@@ -61,10 +57,10 @@ class Sampler:
 
         # solve sde: https://en.wikipedia.org/wiki/Euler%E2%80%93Maruyama_method 
         gdB = torch.einsum('b i j ..., b j ... -> b i ...', g, dB)
-        return (f - g2_score)*dt + 0.1*gdB
+        return (-f + g2_score)*dt + g_scale*gdB
 
     @torch.no_grad()
-    def __call__(self, model, T, save_path='sample.png', order=1, d=10, pad=1e-4):
+    def __call__(self, model, T, save_path='sample.png', order=1, d=10, pad=1e-3):
         if save_path is not None:
             os.makedirs('imgs', exist_ok=True)
 
@@ -77,12 +73,16 @@ class Sampler:
         t_norm = args.t_max - args.t_min
         dt = t_norm * 1/T
 
+        # noise schedule
+        g_scale = np.linspace(0,1,T)[::-1]
+        g_scale = 1.75*np.power(g_scale, 1.5)
+
         # sample loop
         for i in tqdm(range(T)):
             # update x
-            change = self.update_order(model, x, t, dt)
+            change = self.update(model, x, t, dt, g_scale=g_scale[i])
             x = x + change
-            t -= dt# / t_norm
+            t -= dt / t_norm
 
             # keep in simplex 
             x = torch.clamp(x, pad, 1-pad)
@@ -96,7 +96,6 @@ class Sampler:
                 save_vis([x.clone(), change], f'imgs/{int(i/d)}.png', k=self.k)
 
         # discretize
-        x = x.argmax(1)
         for i in range(int(T/d), int(T/d)+10):
             save_vis(x, f'imgs/{i}.png', k=self.k)
 
@@ -134,4 +133,4 @@ if __name__ == '__main__':
 
     # sample from model
     sampler = Sampler(args, batch_size=8, device=device)
-    sampler(model, T=1000, save_path=save_path(args, 'sample'))
+    sampler(model, T=1000, save_path=save_path(args, 'sample.gif'))
