@@ -1,32 +1,16 @@
 import os, sys
-import torch
 import json
-import pickle
+import torch
 import numpy as np
 from einops import repeat
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 
-from tqdm import tqdm
-from utils import get_args
-from plot import make_gif
-
-from utils import onehot2cat
-from plot import save_vis
-from dataloader import mnist_dataset
-
-# TODO: this code is a nightmare!! clean it up
-
-# TODO: these transformations are biased!!
-# generalized sigmoid
+# prevent circular import 
+# map from R^k -> simplex
 def sig(y):
     x_ = y.exp() / (1 + y.exp().sum(dim=1, keepdim=True))
     return x_
-
-# generalized inverse sigmoid
-def sig_inv(x_):
-    xd = 1 - x_.sum(dim=1, keepdim=True)
-    y = x._log() - xd.log()
-    return y
 
 # score or grad log pdf
 def score(x, mu=0, v=1):
@@ -163,7 +147,7 @@ def get_Ot(s0, theta, k, O_init=3., t_init=0.1, N=1000, epochs=5000):
         t_min.data = torch.clamp(t_min, min=1e-5)
 
 # get t_max
-def get_tmax(O, theta, k, t_init=1., N=1000, eps=1e-2, epochs=5000):
+def get_tmax(O, theta, k, t_init=0.1, N=1000, eps=1e-3, epochs=5000):
     t_max = torch.tensor(t_init, requires_grad=True)
     O = -O * torch.ones(k-1) # less biased
 
@@ -188,12 +172,7 @@ def get_tmax(O, theta, k, t_init=1., N=1000, eps=1e-2, epochs=5000):
         t_max.data = torch.clamp(t_max, min=1e-5)
 
         # if converged, exit
-        loss_track.append(loss.item())
-        if len(loss_track) > 100:
-            loss_track.pop(0)
-        if loss_track[-1] > loss_track[0]:
-            #print(1-mean.sum().detach().item())
-            #print(mean.detach().numpy())
+        if loss.item() < eps:
             return t_max.detach().item()
 
     # throw error if not converged

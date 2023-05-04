@@ -1,21 +1,12 @@
 import sys, os
-from tqdm import tqdm
 import torch
 import numpy as np
-from einops import repeat, rearrange
+from einops import repeat
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 from plot import make_gif
-
-def sig(y):
-    x_ = y.exp() / (1 + y.exp().sum(dim=1, keepdim=True))
-    return x_
-
-# generalized inverse sigmoid
-def sig_inv(x_):
-    xd = 1 - x_.sum(dim=1, keepdim=True)
-    y = x_.log() - xd.log()
-    return y
+from process import sig, sig_inv
 
 # plot 2d or 3d scatter plot of distributions
 def plot(x, i, path):
