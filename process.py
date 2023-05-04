@@ -30,7 +30,7 @@ class Process:
         self.O = args.O
         self.t_min = args.t_min
         self.t_max = args.t_max
-        self.theta = torch.tensor(args.theta).to(args.device)
+        self.theta = args.theta
 
         self.k = args.k
         self.device = args.device
@@ -43,6 +43,8 @@ class Process:
 
     # mean and variance of OU process at time t
     def xt(self, x0, t):
+        assert x0.shape[1] == self.k
+
         # convert from S -> O
         O_ = x0[:, :-1]
         O_ *= self.O # this is one-hot * O
@@ -59,6 +61,17 @@ class Process:
         sample = var.sqrt() * torch.randn_like(O) + mu
         xt = sig(sample)
         return xt, mu, var
+
+    # g^2 * score
+    def g2_score(self, xt, mu, var):
+        # useful function
+        score = self.score(xt, mu, var)
+
+        g = self.sde_g(xt)
+        g2 = torch.einsum('b i j ..., b j k ... -> b i k ...', g, g)
+        g2_score = torch.einsum('b i j ..., b j ... -> b i ...', g2, score)
+        
+        return g2_score
 
     # compute score
     def score(self, x_, mu, var):
@@ -115,14 +128,12 @@ testing scripts for process and time sampler
 from tqdm import tqdm
 from args import get_args
 from plot import make_gif
-from auto_params import auto_param
 
 if __name__ == '__main__':
     N = 100 # number of steps
 
     # get device, data and process
     args = get_args()
-    args = auto_param(args) 
     loader = mnist_dataset(8, args.k)
     process = Process(args)
 

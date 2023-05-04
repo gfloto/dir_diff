@@ -10,7 +10,6 @@ from train import train, cat_train
 from dataloader import text8_dataset, mnist_dataset
 from cat import CatProcess
 from process import Process
-from auto_params import auto_param
 from utils import save_path
 
 # sample arguments as json
@@ -24,10 +23,6 @@ def save_args(args):
 if __name__ == '__main__':
     args = get_args()
     args.exp = os.path.join('results', args.exp)
-
-    # get process param for simplex diffusion
-    if args.proc_type == 'simplex':
-        args = auto_param(args) 
 
     # save and print args
     save_args(args)

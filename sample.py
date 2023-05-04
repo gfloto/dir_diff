@@ -49,15 +49,19 @@ class Sampler:
         # get f, g, g^2 score and dB
         f = self.process.sde_f(x)
         g = self.process.sde_g(x)
-        g2_score = model(x, t)
+        score = model(x, t)
+        #g2_score = model(x, t)
+
+        g2 = torch.einsum('b i j ..., b j k ... -> b i k ...', g, g)
+        g2_score = torch.einsum('b i j ..., b j ... -> b i ...', g2, score)
 
         # check f is not nan
         assert torch.isnan(f).sum() == 0, f'f is nan: {f}'
-        dB = (0.1*np.sqrt(dt) * torch.randn_like(x)).to(self.device) 
+        dB = (np.sqrt(dt) * torch.randn_like(x)).to(self.device) 
 
         # solve sde: https://en.wikipedia.org/wiki/Euler%E2%80%93Maruyama_method 
         gdB = torch.einsum('b i j ..., b j ... -> b i ...', g, dB)
-        return (f - g2_score)*dt #+ gdB
+        return (f - g2_score)*dt + 0.1*gdB
 
     @torch.no_grad()
     def __call__(self, model, T, save_path='sample.png', order=1, d=10, pad=1e-4):
@@ -73,16 +77,12 @@ class Sampler:
         t_norm = args.t_max - args.t_min
         dt = t_norm * 1/T
 
-        # noise schedule
-        #g_scale = np.linspace(0,1,T)[::-1]
-        #g_scale = 0.1*g_scale**2
-
         # sample loop
         for i in tqdm(range(T)):
             # update x
             change = self.update_order(model, x, t, dt)
-            x += change
-            t -= dt / t_norm
+            x = x + change
+            t -= dt# / t_norm
 
             # keep in simplex 
             x = torch.clamp(x, pad, 1-pad)
@@ -98,7 +98,7 @@ class Sampler:
         # discretize
         x = x.argmax(1)
         for i in range(int(T/d), int(T/d)+10):
-            save_vis(x, f'imgs/{i}.png', k=self.k, a=self.a)
+            save_vis(x, f'imgs/{i}.png', k=self.k)
 
         # save gif
         if save_path is not None:

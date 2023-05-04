@@ -22,17 +22,13 @@ def train(model, process, loader, opt, args):
         xt, mu, var = process.xt(x0, t)
 
         # learn g^2 score instead of score 
-        score = process.score(xt, mu, var)
-
-        g = process.sde_g(xt)
-        g2 = torch.einsum('b i j ..., b j k ... -> b i k ...', g, g)
-        g2_score = torch.einsum('b i j ..., b j ... -> b i ...', g2, score)
+        g2_score = process.g2_score(xt, mu, var)
 
         # predict g^2 score
         score_out = model(xt, tu)
 
         # loss
-        loss = torch.mean((score_out - g2_score)**2)
+        loss = (score_out - g2_score).pow(2).mean()
 
         # backward pass
         opt.zero_grad()
