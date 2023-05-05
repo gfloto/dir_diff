@@ -26,7 +26,7 @@ g(x) = x(1-x/a)
 '''
 
 class Sampler:
-    def __init__(self, args, batch_size, device):
+    def __init__(self, args, batch_size, device, fast=False):
         self.O = args.O
         self.t_min = args.t_min
         self.t_max = args.t_max
@@ -42,6 +42,9 @@ class Sampler:
             self.end_shape = (32, 32)
         elif args.dataset == 'text8':
             self.end_shape = (8)
+
+        # disable cpu <-> gpu copies and disable gif creation
+        self.fast = fast
 
     # get intial distribution at t = t_max
     def init_sample(self):
@@ -59,7 +62,8 @@ class Sampler:
         g2_score = model(x, t)
 
         # check f is not nan
-        assert torch.isnan(f).sum() == 0, f'f is nan: {f}'
+        if not self.fast:
+            assert torch.isnan(f).sum() == 0, f'f is nan: {f}'
         dB = (np.sqrt(dt) * torch.randn_like(x)).to(self.device) 
 
         # solve sde: https://en.wikipedia.org/wiki/Euler%E2%80%93Maruyama_method 
@@ -97,18 +101,18 @@ class Sampler:
             x = torch.where(xsum > 1-pad, (1-pad)*x/xsum, x)
 
             # save sample
-            if save_path is not None:
+            if save_path is not None and not self.fast:
                 # normalize change to be [0, 1] to visualize 
                 change = (change - change.min()) / (change.max() - change.min())
                 save_vis([x.clone(), change], f'imgs/{int(i/d)}.png', k=self.k)
+        if not self.fast:
+            # discretize
+            for i in range(int(T/d), int(T/d)+10):
+                save_vis(x, f'imgs/{i}.png', k=self.k)
 
-        # discretize
-        for i in range(int(T/d), int(T/d)+10):
-            save_vis(x, f'imgs/{i}.png', k=self.k)
-
-        # save gif
-        if save_path is not None:
-            make_gif('imgs', save_path, int(T/d)+10)
+            # save gif
+            if save_path is not None:
+                make_gif('imgs', save_path, int(T/d)+10)
 
         return x
 
@@ -118,12 +122,12 @@ def sampler_wrapper(model, T, order, g_scale_alpha, g_scale_beta, batch_size=8):
     order = 1 if order < 1.5 else 2
     for i in range(num_samples_run):
         # sample from model
-        sampler = Sampler(args, batch_size=8, device=device)
-        result = sampler(model, T=1000, save_path=save_path(args, 'sample.gif'))
+        sampler = Sampler(args, batch_size=256, device=device, fast=True)
+        result = sampler(model, T=T, g_scale_beta=g_scale_beta, g_scale_alpha=g_scale_alpha, save_path=save_path(args, 'sample.gif'))
         results.append(result)
     return results
 
-def compute_fid(T, order, g_scale_alpha, g_scale_beta, batch_size=8):
+def compute_fid(T, g_scale_alpha, g_scale_beta, order=1, batch_size=8):
     print(f'Computing FID for T={T}, order={order}, g_scale_alpha={g_scale_alpha}, g_scale_beta={g_scale_beta}, batch_size={batch_size}')
     model_results = sampler_wrapper(model, T, order, g_scale_alpha=g_scale_alpha, g_scale_beta=g_scale_beta, batch_size=batch_size)
     model_results = torch.cat(model_results, dim=0)
@@ -170,7 +174,7 @@ def get_sample_args():
 
 def load_sample_data(dataset):
     if dataset == "mnist":
-        data = mnist_dataset(args.batch_size, args.k, num_workers=0, use_full_batch=True)
+        data = mnist_dataset(args.batch_size, args.k, num_workers=0)
         true_data, _ = next(iter(data))
         true_data = true_data.reshape(-1, 32 * 32).cpu().numpy()
         mu_true, sigma_true = np.mean(true_data, axis=0), np.cov(true_data, rowvar=False)
@@ -198,7 +202,7 @@ if __name__ == '__main__':
 
     # Bayesian Optimization config
     num_samples_run = 1
-    param_bounds = {'order': (1), 'g_scale_alpha': (0.01, 4), 'g_scale_beta': (1, 4), 'batch_size': (8, 64), 'T': (1000, 3000)}
+    param_bounds = {'g_scale_alpha': (0.01, 4), 'g_scale_beta': (1, 4), 'T': (1000, 3000)}
 
     bayes_optim = BayesianOptimization(
         f=compute_fid,
@@ -207,9 +211,9 @@ if __name__ == '__main__':
         verbose=2,
     )
 
-    logger = JSONLogger(path="./results/beta/bayes_optim_logs.json")
+    logger = JSONLogger(path=os.path.join('results', sample_args.exp, "bayes_optim_logs.json"))
     bayes_optim.subscribe(Events.OPTIMIZATION_STEP, logger)
     bayes_optim.maximize(
         init_points=50,
-        n_iter=180,
+        n_iter=750,
     )
