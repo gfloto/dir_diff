@@ -1,0 +1,1 @@
+{"exp": "results\\general_mnist", "k": 3, "proc_type": "simplex", "dataset": "mnist", "cat_mag": 0.9, "lr": 0.0001, "batch_size": 128, "epochs": 250, "device": "cuda", "theta": 21.270427703857422, "O": 3.334425449371338, "t_min": 0.007543108891695738, "t_max": 0.25316321849823}

@@ -1,13 +1,20 @@
 import sys, os
+
+import scipy
 import torch
 import numpy as np
 from tqdm import tqdm
 from einops import repeat
 
+from dataloader import mnist_dataset
 from model import Unet
 from process import sig, Process 
 from plot import save_vis, make_gif
 from utils import save_path
+
+from bayes_opt import BayesianOptimization
+from bayes_opt.logger import JSONLogger
+from bayes_opt.event import Events
 
 '''
 score matching sampling from: https://arxiv.org/abs/2011.13456
@@ -60,7 +67,7 @@ class Sampler:
         return (-f + g2_score)*dt + g_scale*gdB
 
     @torch.no_grad()
-    def __call__(self, model, T, save_path='sample.png', order=1, d=10, pad=1e-3):
+    def __call__(self, model, T, save_path='sample.png', order=1, d=10, pad=1e-3, g_scale_alpha = 1.75, g_scale_beta=1.5):
         if save_path is not None:
             os.makedirs('imgs', exist_ok=True)
 
@@ -75,7 +82,7 @@ class Sampler:
 
         # noise schedule
         g_scale = np.linspace(0,1,T)[::-1]
-        g_scale = 1.75*np.power(g_scale, 1.5)
+        g_scale = g_scale_alpha*np.power(g_scale, g_scale_beta)
 
         # sample loop
         for i in tqdm(range(T)):
@@ -103,6 +110,52 @@ class Sampler:
         if save_path is not None:
             make_gif('imgs', save_path, int(T/d)+10)
 
+        return x
+
+def sampler_wrapper(model, T, order, g_scale_alpha, g_scale_beta, batch_size=8):
+    results = []
+    batch_size, T = int(batch_size), int(T)
+    order = 1 if order < 1.5 else 2
+    for i in range(num_samples_run):
+        # sample from model
+        sampler = Sampler(args, batch_size=8, device=device)
+        result = sampler(model, T=1000, save_path=save_path(args, 'sample.gif'))
+        results.append(result)
+    return results
+
+def compute_fid(T, order, g_scale_alpha, g_scale_beta, batch_size=8):
+    print(f'Computing FID for T={T}, order={order}, g_scale_alpha={g_scale_alpha}, g_scale_beta={g_scale_beta}, batch_size={batch_size}')
+    model_results = sampler_wrapper(model, T, order, g_scale_alpha=g_scale_alpha, g_scale_beta=g_scale_beta, batch_size=batch_size)
+    model_results = torch.cat(model_results, dim=0)
+    return compute_fid_score(model_results)
+
+def compute_fid_score(model_results):
+    model_results = model_results.reshape(-1, 32*32).cpu().numpy()
+    mu_model, sigma_model = np.mean(model_results, axis=0), np.cov(model_results, rowvar=False)
+
+    # compute fid
+    # adapted from https://github.com/mseitzer/pytorch-fid/blob/master/src/pytorch_fid/fid_score.py
+    diff = mu_true - mu_model
+    covmean, _ = scipy.linalg.sqrtm(sigma_true.dot(sigma_model), disp=False)
+    if not np.isfinite(covmean).all():
+        eps = 1e-6
+        msg = f'fid calculation produces singular product; adding {eps} to diagonal of cov estimates'
+        print(msg)
+        offset = np.eye(sigma_true.shape[0]) * eps
+        covmean = scipy.linalg.sqrtm((sigma_true + offset).dot(sigma_model + offset))
+    # numerical error might give slight imaginary component
+    if np.iscomplexobj(covmean):
+        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
+            m = np.max(np.abs(covmean.imag))
+            raise ValueError('Imaginary component {}'.format(m))
+        covmean = covmean.real
+    tr_covmean = np.trace(covmean)
+    fid = diff.dot(diff) + np.trace(sigma_true) + np.trace(sigma_model) - 2 * tr_covmean
+
+    print(f"fid score: {fid}")
+    return -fid
+
+
 import json
 import argparse
 
@@ -114,6 +167,14 @@ def get_sample_args():
 
     assert args.exp is not None, 'Must specify experiment name'
     return args
+
+def load_sample_data(dataset):
+    if dataset == "mnist":
+        data = mnist_dataset(args.batch_size, args.k, num_workers=0, use_full_batch=True)
+        true_data, _ = next(iter(data))
+        true_data = true_data.reshape(-1, 32 * 32).cpu().numpy()
+        mu_true, sigma_true = np.mean(true_data, axis=0), np.cov(true_data, rowvar=False)
+    return mu_true, sigma_true
 
 if __name__ == '__main__':
     sample_args = get_sample_args()
@@ -131,6 +192,24 @@ if __name__ == '__main__':
     model.eval() 
     print(f'Loaded model from {model_path}')
 
-    # sample from model
-    sampler = Sampler(args, batch_size=8, device=device)
-    sampler(model, T=1000, save_path=save_path(args, 'sample.gif'))
+    # load dataset to compute mu_true, sigma_true for FID
+    dataset = args.dataset # should be the name of the dataset
+    mu_true, sigma_true = load_sample_data(dataset)
+
+    # Bayesian Optimization config
+    num_samples_run = 1
+    param_bounds = {'order': (1), 'g_scale_alpha': (0.01, 4), 'g_scale_beta': (1, 4), 'batch_size': (8, 64), 'T': (1000, 3000)}
+
+    bayes_optim = BayesianOptimization(
+        f=compute_fid,
+        pbounds=param_bounds,
+        random_state=1,
+        verbose=2,
+    )
+
+    logger = JSONLogger(path="./results/beta/bayes_optim_logs.json")
+    bayes_optim.subscribe(Events.OPTIMIZATION_STEP, logger)
+    bayes_optim.maximize(
+        init_points=50,
+        n_iter=180,
+    )
