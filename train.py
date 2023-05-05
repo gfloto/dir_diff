@@ -49,6 +49,10 @@ def cat_train(model, process, loader, opt, args):
 
         # p(x_t-1 | xt) ∝ sum_x0 q(x_t-1 | xt, x0) p(x0 | xt)
         pred = model(xt, t / process.T)
+        # 1) different loss
+            # q
+
+        # 2) Lvb
         log_pred = log_softmax(pred, dim=1)
 
         # q(x_t-1 | xt, x0)

@@ -279,6 +279,48 @@ $$
 
 ---
 
+## Implimentation
+We are interested in simplifying the previous equations and learning $g^2(S_t) \nabla_s p(S_t)$ directly. We are interested in the following form:
+
+$$d\bm{S}_t = \bm{f}(\bm{S}_t)dt + \bm{G}(\bm{S}_t)d\bm{B}_t$$
+
+First the drift term can be simplified:
+
+$$
+\begin{aligned}
+    f_i(\bm{S})dt &= -\theta S_i\left[(1-S_i)X_i +\sum_{i\neq j}S_jX_j + \frac{1}{2}(1-S_i)(1-2S_i) + \frac{1}{2}\sum_{i \neq j} S_j(1-2S_j) \right]dt \\
+    &= -\theta S_i \left[ (1-S_i)\beta_i - \sum_{i\neq j}S_j\beta_j \right]dt
+\end{aligned}
+$$
+
+where $\beta_j = X_j+\frac{1}{2}(1-2S_j)$ and $S_d = 1 - \sum_{k=1}^{d-1}S_k$
+
+We would now like to combine $\bm{G}$ and $\nabla_s p(\bm{S}_t)$ by: $\bm{G}\bm{G}^\top \nabla_s p(\bm{S}_t)$, with the following definitions:
+
+$$ 
+\begin{aligned}
+    g_i (\bm{S})d\bm{B} &= S_i(1-S_i)dB_i - \sum_{i\neq j}S_iS_jdB_j \\
+    \bm{G} &= \textrm{diag}(g)
+\end{aligned}
+$$
+
+$$
+\begin{aligned}
+    \nabla_S p(S)_i &= \frac{v^{-1}(S_i-S_d)-S_d\gamma_i(\bm{S},\mu) - S_i\sum_{k=1}^{d-1}\gamma_k(\bm{S},\mu)}{vS_iS_d} \\
+    &= \frac{\Omega_i(\bm{S}, \mu, v)}{vS_iS_d}
+\end{aligned}
+$$
+
+We are interested is learning:
+
+$$
+\begin{aligned}
+    \bm{G}\bm{G}^\top \nabla_s p(\bm{S})_i &= \frac{S_i(1-S_i)^2}{vS_d}\Omega_i + \sum_{i\neq j}\frac{S_iS_j^2}{vS_d}\Omega_j
+\end{aligned}
+$$
+
+---
+
 ## Vectorized Implimentation
 
 We would like a vectorized implimentation in the following form:

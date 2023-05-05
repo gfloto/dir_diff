@@ -112,7 +112,7 @@ def sample(O, theta, t, k, N=1000):
 def get_Ot(s0, theta, k, O_init=3., t_init=0.1, N=1000, epochs=5000):
     s0_a = s0 # case when cat < k
     s0_b = s0_a.clone() # case when cat = k
-    s0_b[0] = s0_b[1]
+    s0_b[0] = (1 - s0_a[0]) / (k-1)
 
     # given k, and theta: find O and t_min
     # we want to match mean sig(O)to match S0 and var to be minimized 
@@ -251,7 +251,7 @@ def auto_param(args):
     return args
 
 if __name__ == '__main__':
-    k=10; cat_mag=0.9
+    k=3; cat_mag=0.9
 
     # set initial value
     S0 = torch.zeros(k-1) + (1 - cat_mag)/(k-1)

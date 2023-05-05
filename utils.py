@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.image import NonUniformImage
 
 # argparse
+# TODO: this shouldn't be in utils!!!
 def get_args():
     parser = argparse.ArgumentParser()
     # add exp name
@@ -47,6 +48,7 @@ def cat2onehot(x, k):
 def ptnp(x):
     return x.detach().cpu().numpy()
 
+# TODO: this isn't used... probably just delete it
 class InfoLogger:
     def __init__(self):
         self.loss = None
