@@ -518,8 +518,6 @@ class TransformerNetModel(nn.Module):
         h = h.type(x.dtype)
         return h
 
-
-
 if __name__ == "__main__":
     model = TransformerNetModel(emb_dim=256, vocab_size=27)
     fake_data = torch.rand(1, 27, 256)
