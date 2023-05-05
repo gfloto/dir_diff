@@ -1,51 +1,12 @@
 import sys, os
-from tqdm import tqdm
 import torch
 import numpy as np
-from einops import repeat, rearrange
+from einops import repeat
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 
-from plot import make_gif
-
-def sig(y):
-    x_ = y.exp() / (1 + y.exp().sum(dim=1, keepdim=True))
-    return x_
-
-# generalized inverse sigmoid
-def sig_inv(x_):
-    xd = 1 - x_.sum(dim=1, keepdim=True)
-    y = x_.log() - xd.log()
-    return y
-
-# plot 2d or 3d scatter plot of distributions
-def plot(x, i, path):
-    d = x[0].shape[1]
-    if d == 2:
-        # plot 2d
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-
-        plt.scatter(x[0][:,0], x[0][:,1], s=2)
-        plt.scatter(x[1][:,0], x[1][:,1], s=2)
-
-    if d == 3:
-        # plot 3d
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.view_init(0.1*i, i-90)
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-        ax.set_zlim(0, 1)
-
-        ax.scatter(x[0][:, 0], x[0][:, 1], x[0][:,2], s=2)
-        ax.scatter(x[1][:, 0], x[1][:, 1], x[1][:,2], s=2)
-
-    #if i % 10 == 0: plt.show()
-    plt.legend(['OU', 'S'])
-    plt.savefig(path)
-    plt.close()
+from process import sig, sig_inv
+from plot import make_gif, scatter_plot
 
 # OU process in gaussian space, mapped back to simplex
 class GProcess:
@@ -135,7 +96,7 @@ if __name__ == '__main__':
 
         # plot together to compare
         q = np.random.choice(2, 5, replace=True)
-        plot([gxt, sxt[:,:,q[0],q[1]]], i, f'imgs/{i}.png')
+        scatter_plot([gxt, sxt[:,:,q[0],q[1]]], i, f'imgs/{i}.png')
 
     make_gif('imgs', 'ito_check.gif', T)
 

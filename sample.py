@@ -2,38 +2,12 @@ import sys, os
 import torch
 import numpy as np
 from tqdm import tqdm
-from einops import repeat, rearrange
+from einops import repeat
 
-from process import sig, sig_inv
-from utils import save_path
 from model import Unet
+from process import sig, Process 
 from plot import save_vis, make_gif
-
-# TODO: extend this to work with images
-# batched vector -> diagonal matrix with else c 
-def diag_d(X, c): # matrix x[b,k,h,w], scalar c
-    b, k, h, w = X.shape
-
-    # pattern to keep diagonal entries, else 1
-    E_ = torch.eye(k, device=X.device)
-    E = repeat(E_, 'i j -> b i j h w', b=b, h=h, w=w)
-    Y = torch.einsum('b i h w, b i j h w -> b i j h w', X-c, E)
-    Y = Y + c # do this to keep c on non-diagonal entries
-
-    return Y
-
-# batched vector -> repated matrix with c on diagonals 
-def diag_u(X, c): # matrix x[b,k,h,w], scalar c
-    b, k, h, w = X.shape
-    X_ = repeat(X-c, 'b k h w -> b k d h w', d=k)
-
-    # pattern to make diagonal entries c, else same
-    E_ = 1 - torch.eye(k, device=X.device)
-    E = repeat(E_, 'i j -> b i j h w', b=b, h=h, w=w)
-    Y = torch.einsum('b i h w, b i j h w -> b i j h w', X-c, E)
-    Y = Y + c # do this to keep c on non-diagonal entries
-
-    return Y
+from utils import save_path
 
 '''
 score matching sampling from: https://arxiv.org/abs/2011.13456
@@ -46,93 +20,47 @@ g(x) = x(1-x/a)
 
 class Sampler:
     def __init__(self, args, batch_size, device):
-        self.O = torch.tensor(args.O)
-        self.h = torch.tensor(args.h)
-        self.a = torch.tensor(args.a)
-        self.k = args.k
-        self.t_min, self.t_max = args.T
-        self.device = device
+        self.O = args.O
+        self.t_min = args.t_min
+        self.t_max = args.t_max
+        self.theta = args.theta 
 
+        self.k = args.k
+        self.device = device
         self.batch_size = batch_size
-        self.img_shape = (32, 32)
+        self.process = Process(args) # for sde_f and sde_g
+
+        # shapes for image vs text datasets
+        if args.dataset in ['mnist', 'cifar10']:
+            self.end_shape = (32, 32)
+        elif args.dataset == 'text8':
+            self.end_shape = (8)
 
     # get intial distribution at t = t_max
     def init_sample(self):
-        var = 1/(2*self.h) #* (1 - (-2*self.h * self.t_max).exp())
-        sample = var.sqrt() * torch.randn(self.batch_size, self.k-1, *self.img_shape)
-        x = sig(sample, self.a) 
+        var = 1/(2*self.theta)
+        sample = (np.sqrt(var) * torch.randn(self.batch_size, self.k-1, *self.end_shape)).to(self.device)
+        x = sig(sample) 
         return x
 
-    # jacobian term: x is [b,k-1,h,w]
-    # this is from equation _ in _
-    def jac(self, x):
-        f1 = self.a * repeat(x, 'b k h w -> b k d h w', d=self.k-1) 
-        f2 = diag_d(1-x, 1)
-        f3 = diag_u(x, 1)
+    # backward: dx = [f(x,t) - g(x)^2 score_t(x)]dt + g(t)dB
+    # TODO: re-impliment RK2
+    def update(self, model, x, t, dt, g_scale=1):
+        # get f, g, g^2 score and dB
+        f = self.process.sde_f(x)
+        g = self.process.sde_g(x)
+        g2_score = model(x, t)
 
-        J = f1 * f2 * f3
-        return J
+        # check f is not nan
+        assert torch.isnan(f).sum() == 0, f'f is nan: {f}'
+        dB = (np.sqrt(dt) * torch.randn_like(x)).to(self.device) 
 
-    # hessian term
-    # this is from equation _ in _
-    def hess(self, x):
-        f1 = self.a * x * (1-x)
-
-        m = diag_u(x, 0)
-        f = x * (1 - 2*x)
-        f2 = torch.einsum('b i j h w, b j h w -> b i h w', m, f)
-
-        h = f1 + f2
-        return h
-
-    # drift term and diffusion term
-    def f_g(self, x):
-        a = x.clone()
-        J = self.jac(x)
-        h = self.hess(x)
-
-        s = sig_inv(x, self.a)
-        f_ = torch.einsum('b i j h w, b j h w -> b i h w', J, s)
-
-        f = -self.h*f_ + 0.5*h # drift term
-        g = J # diffusion term
-
-        return f, g 
-
-    def update_order(self, model, x, t, dt, order=1, g_scale=0.02):
-        # get info for euler discretization of sde solution
-        f, g = self.f_g(x)
-        print(f.max(), f.min(), g.max(), g.min())
-        sys.exit()
-
-        gs = torch.einsum('b i j h w, b j k h w -> b i k h w', g, g) # g^2
-        eps = torch.randn_like(x).to(self.device) 
-        score = model(x, t)
-
-        # runge kutta solvers
-        if order == 1:
-            a = torch.einsum('b i j h w, b j h w -> b i h w', gs, score)
-            b = torch.einsum('b i j h w, b j h w -> b i h w', g, eps)
-            update = (f + a)*dt #+ g_scale*b
-
-        elif order == 2:
-            raise NotImplementedError
-
-            k1 = dt * (f + g**2 * score) # k1 is same as euler first order
-            x1 = x + k1
-            f1 = self.f(x1)
-            g1 = self.g(x1)
-            t1 = t - dt
-
-            score1 = model(x1, t1).squeeze()
-            k2 = dt * (f1 + g1**2 * score1)
-            update = (k1+k2)/2 + g_scale*g1*eps 
-
-        return update
-            
+        # solve sde: https://en.wikipedia.org/wiki/Euler%E2%80%93Maruyama_method 
+        gdB = torch.einsum('b i j ..., b j ... -> b i ...', g, dB)
+        return (-f + g2_score)*dt + g_scale*gdB
 
     @torch.no_grad()
-    def __call__(self, model, T, save_path='sample.png', order=1, d=10):
+    def __call__(self, model, T, save_path='sample.png', order=1, d=10, pad=1e-3):
         if save_path is not None:
             os.makedirs('imgs', exist_ok=True)
 
@@ -141,32 +69,35 @@ class Sampler:
 
         # select times for nn (always 0-1)
         t = torch.tensor([1.]).to(self.device)
-        t_norm = args.T[1] - args.T[0]
-        dt = t_norm * torch.tensor([1/T]).to(self.device)
+        # dt for sde solver
+        t_norm = args.t_max - args.t_min
+        dt = t_norm * 1/T
 
         # noise schedule
         g_scale = np.linspace(0,1,T)[::-1]
-        g_scale = 0.1*g_scale**2
+        g_scale = 1.75*np.power(g_scale, 1.5)
 
         # sample loop
         for i in tqdm(range(T)):
-            update = self.update_order(model, x, t, dt, order=order, g_scale=g_scale[i])
-
             # update x
-            x += update
+            change = self.update(model, x, t, dt, g_scale=g_scale[i])
+            x = x + change
             t -= dt / t_norm
+
+            # keep in simplex 
+            x = torch.clamp(x, pad, 1-pad)
+            xsum = x.sum(1, keepdim=True)
+            x = torch.where(xsum > 1-pad, (1-pad)*x/xsum, x)
 
             # save sample
             if save_path is not None:
-                x_save = x.clone()
-                # TODO: there should be a better way to do this...
-                update = self.a * (update - update.min()) / (update.max() - update.min())
-                save_vis([x.clone(), update], f'imgs/{int(i/d)}.png', k=self.k, a=self.a)
+                # normalize change to be [0, 1] to visualize 
+                change = (change - change.min()) / (change.max() - change.min())
+                save_vis([x.clone(), change], f'imgs/{int(i/d)}.png', k=self.k)
 
         # discretize
-        x = x.argmax(1)
         for i in range(int(T/d), int(T/d)+10):
-            save_vis(x, f'imgs/{i}.png', k=self.k, a=self.a)
+            save_vis(x, f'imgs/{i}.png', k=self.k)
 
         # save gif
         if save_path is not None:
@@ -174,9 +105,19 @@ class Sampler:
 
 import json
 import argparse
+
+# to load experiment
+def get_sample_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--exp', type=str, default=None, help='experiment name')
+    args = parser.parse_args()
+
+    assert args.exp is not None, 'Must specify experiment name'
+    return args
+
 if __name__ == '__main__':
-    name = 'mnist10'
-    path = os.path.join('results', name)
+    sample_args = get_sample_args()
+    path = os.path.join('results', sample_args.exp)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # load json of args
@@ -185,12 +126,11 @@ if __name__ == '__main__':
 
     # load model
     model = Unet(dim=64, channels=args.k-1).to(device)
-    model_path = os.path.join('results', name, f'model_{args.proc_name}.pt')
+    model_path = os.path.join('results', sample_args.exp, f'model.pt')
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval() 
     print(f'Loaded model from {model_path}')
 
-    # print model name
     # sample from model
     sampler = Sampler(args, batch_size=8, device=device)
-    sampler(model, T=1000, save_path=save_path(args, 'sample'))
+    sampler(model, T=1000, save_path=save_path(args, 'sample.gif'))

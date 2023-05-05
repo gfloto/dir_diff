@@ -9,7 +9,9 @@ from tqdm import tqdm
 from utils import ptnp
 from plot import save_vis
 
-def train(model, process, loader, opt, logger, args):
+from einops import repeat
+
+def train(model, process, loader, opt, args):
     device = args.device; k = args.k
     model.train()
     loss_track = []
@@ -19,12 +21,14 @@ def train(model, process, loader, opt, logger, args):
         t, tu = process.t() # get scaled and unscaled t
         xt, mu, var = process.xt(x0, t)
 
-        # get correct score and predicted score
-        score = process.score(xt, mu, var)
+        # learn g^2 score instead of score 
+        g2_score = process.g2_score(xt, mu, var)
+
+        # predict g^2 score
         score_out = model(xt, tu)
 
         # loss
-        loss = torch.mean((score_out - score)**2)
+        loss = (score_out - g2_score).pow(2).mean()
 
         # backward pass
         opt.zero_grad()
