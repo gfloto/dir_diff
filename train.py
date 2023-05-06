@@ -48,6 +48,7 @@ def cat_train(model, process, loader, opt, args):
         if isinstance(x0, tuple):
             x0 = x0[0] 
         x0 = x0.to(args.device)
+        print(x0.shape)
 
         # get t, x0 xt
         t, tu = process.t()

@@ -261,7 +261,6 @@ class Attention(nn.Module):
         return self.to_out(out)
 
 # model
-
 class Unet(nn.Module):
     def __init__(
         self,
@@ -391,7 +390,8 @@ class Unet(nn.Module):
         return x
 
 
-class TransformerNetModel(nn.Module):
+# transformer model
+class Transformer(nn.Module):
     """
     The full Transformer model with attention and timestep embedding.
     :param input_dims: dims of the input Tensor.
@@ -519,6 +519,6 @@ class TransformerNetModel(nn.Module):
         return h
 
 if __name__ == "__main__":
-    model = TransformerNetModel(emb_dim=256, vocab_size=27)
+    model = Transformer(emb_dim=256, vocab_size=27)
     fake_data = torch.rand(1, 27, 256)
     summary(model, input_data=[fake_data, torch.tensor([1])])

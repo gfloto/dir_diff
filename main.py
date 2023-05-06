@@ -5,7 +5,7 @@ import argparse
 import matplotlib.pyplot as plt
 
 from args import get_args
-from model import Unet
+from model import Unet, Transformer
 from train import train, cat_train
 from dataloader import text8_dataset, mnist_dataset
 from cat import CatProcess
@@ -43,8 +43,11 @@ if __name__ == '__main__':
         raise ValueError(f'not implemented yet: {args.dataset}')
 
     # load model and optimizer
-    ch = args.k if args.proc_type == 'cat' else args.k-1
-    model = Unet(dim=64, channels=ch).to(args.device)
+    if args.dataset in ['mnist', 'cifar10']:
+        ch = args.k if args.proc_type == 'cat' else args.k-1
+        model = Unet(dim=64, channels=ch).to(args.device)
+    elif args.dataset == 'text8':
+        model = Transformer(emb_dim=256, vocab_size=27)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     # load process

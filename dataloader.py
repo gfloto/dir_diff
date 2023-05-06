@@ -55,7 +55,6 @@ class Text8Dataset(Dataset):
     def load_data(self):
         # if data exists, load data
         if os.path.exists('data/text8.pt'):
-            print('Loading data...')
             return torch.load('data/text8.pt')
 
         # check if data exists otherwise make GET request to data URL string
