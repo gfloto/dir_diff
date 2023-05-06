@@ -15,40 +15,52 @@ def str2bool(x):
 def get_args():
     parser = argparse.ArgumentParser()
     # add exp name
-    parser.add_argument('--exp', type=str, default='general_mnist', help='experiment name')
+    parser.add_argument('--exp', type=str, default=None, help='experiment name')
     parser.add_argument('--k', type=int, default=3, help='number of categories')
     parser.add_argument('--proc_type', type=str, default='cat', help='process type: simplex or cat')
-    parser.add_argument('--dataset', type=str, default='mnist', help='dataset: mnist, cifar10 or text8')
-
-    # TODO: this is for the simplex and is confusing to use the word cat
-    parser.add_argument('--cat_mag', type=float, default=0.9, help='value s.t. s=[cat_mag, c, c, ...]')
-    parse.add_argument('--sparse_cat', type=str, default='False', help='use sparse method to get p(x_t | x_{t-1})')
-    parse.add_argument('--trunc_logistic', type=str, default='False', help='whether to use truncated logistic during training')
-
+    parser.add_argument('--dataset', type=str, default='text8', help='dataset: mnist, cifar10 or text8')
+    
     parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
     parser.add_argument('--batch_size', type=int, default=128, help='batch size')
     parser.add_argument('--epochs', type=int, default=250, help='number of epochs')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
+
+
+    # simplex diffusion params
+    parser.add_argument('--simplex_loc', type=float, default=0.9, help='value s.t. s=[simplex_loc, c, c, ...]')
+
+    # categorical diffusion params
+    parser.add_argument('--T', type=int, default=2000, help='time steps for discretizing time in [0,1]')
+    parser.add_argument('--q_method', type=str, default='uniform', help='noising method for categorical')
+    parser.add_argument('--p_sparse', type=str, default='True', help='use sparse method to get p(x_t | x_{t-1})')
+    parser.add_argument('--trunc_logistic', type=str, default='True', help='whether to use truncated logistic during training')
+    parser.add_argument('--lmbda', type=float, default=None, help='loss factor when using truncated logistic training')
+
     args = parser.parse_args()
 
     # convert str to bool
-    args.sparse_cat = str2bool(args.sparse_cat)
+    args.sparse_cat = str2bool(args.p_sparse)
     args.trunc_logistic = str2bool(args.trunc_logistic)
 
     # asserts
     assert args.k > 1, 'k must be greater than 1'
-    assert args.cat_mag > 0 and args.cat_mag < 1, 'cat_mag must be [0,1]'
+    assert args.simplex_loc > 0 and args.simplex_loc < 1, 'simplex_loc must be [0,1]'
     assert args.device in ['cuda', 'cpu'], 'device must be cuda or cpu'
     assert args.proc_type in ['cat', 'simplex'], 'process name must be cat or simplex'
     assert args.dataset in ['mnist', 'cifar10', 'text8'], 'dataset must be mnist, cifar10 or text8'
+    assert args.q_method in ['uniform', 'sparse', 'absorbing', 'gaussian', 'knn'], 'cat_method must be uniform, sparse, absorbing, gaussian or knn'
 
     # get process param for simplex diffusion
     if args.proc_type == 'simplex':
         args = auto_param(args) 
 
     # sparse cat always true if trunc logistic is used
-    if args.trunc_logistic and not args.sparse_cat:
-        args.sparse_cat = True
-        print('overriding sparse_cat to True since trunc_logistic is True')
+    if args.trunc_logistic:
+        if not args.sparse_cat:
+            args.sparse_cat = True
+            print('overriding sparse_cat to True since trunc_logistic is True')
+        if not args.lmbda:
+            args.lmbda = 0.1
+            print('overriding lmbda to 0.1 since trunc_logistic is True')
 
     return args

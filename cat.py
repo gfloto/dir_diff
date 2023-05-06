@@ -36,21 +36,25 @@ see: https://arxiv.org/pdf/2107.03006.pdf
 '''
 
 class CatProcess:
-    def __init__(self, k, T, method, data_type, device):
-        self.k = k
-        self.T = T
-        self.method = method
-        self.data_type = data_type
-        self.device = device
+    def __init__(self, args):
+        self.k = args.k
+        self.T = args.T
+        self.method = args.q_method
+        self.device = args.device
 
-        self.betas = torch.linspace(1e-4, 0.02, T)
-        self.Q_bar = self.Q_bar(T).to(self.device)
+        self.betas = torch.linspace(1e-4, 0.02, self.T)
+        self.Q_bar = self.Q_bar(self.T).to(self.device)
+
+        if args.dataset in ['mnist', 'cifar10']:
+            self.data_type = 'image'
+        elif args.dataset in ['text8']:
+            self.data_type = 'text'
 
     # get t, rescale to be in proper interval
     def t(self):
-        t = torch.randint(process.T, (1,))
-        tu = t / process.T
-        return t.to(self.device), tu.to(self.device)
+        t = torch.randint(self.T, (1,))
+        tu = t / self.T
+        return t.item(), tu.to(self.device)
 
     # forward process
     def xt(self, x0, t):
@@ -66,7 +70,7 @@ class CatProcess:
             b = self.betas[t]; k = self.k
             Qt = (1-b) * torch.eye(k) + b*torch.ones(k,k) / k
 
-        elif method == 'absorbing':
+        elif self.method == 'absorbing':
             # if the data is an image m is set to (128, 128, 128) at index K//2
             # if the data is text m is set to [MASK] at index K-1
             m = self.k // 2 if self.data_type == 'image' else self.k - 1
@@ -74,7 +78,7 @@ class CatProcess:
             Qt = (1 - beta_t) * torch.eye(self.k)
             Qt[:, m] += beta_t
 
-        elif method == 'gaussian':
+        elif self.method == 'gaussian':
             beta_t = self.betas[t]
             Qt = torch.zeros(self.k, self.k)
             beta_t = torch.tensor(beta_t)
@@ -84,7 +88,7 @@ class CatProcess:
             Qt[range(self.k), range(self.k)] = 0
             Qt[range(self.k), range(self.k)] = 1 - Qt.sum(dim=1)
 
-        elif method == 'knn':
+        elif self.method == 'knn':
             # Compute the pairwise distances between all words in the embedding space
             distances = torch.cdist(embeddings, embeddings)
 

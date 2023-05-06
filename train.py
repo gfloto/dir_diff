@@ -1,15 +1,10 @@
 import sys, os
+from tqdm import tqdm
 import torch
 import numpy as np
-from torch.distributions import Beta
-from torch.nn.functional import kl_div as kld
-from torch.nn.functional import log_softmax
-from tqdm import tqdm
+from torch.nn.functional import log_softmax, cross_entropy
 
 from utils import ptnp
-from plot import save_vis
-
-from einops import repeat
 
 def train(model, process, loader, opt, args):
     device = args.device; k = args.k
@@ -48,11 +43,15 @@ def cat_train(model, process, loader, opt, args):
 
     model.train()
     loss_track = []
-    for i, (x0, _) in enumerate(tqdm(loader)):
-        # get t, x0 xt
+    for i, x0 in enumerate(tqdm(loader)):
+        # difference in dataloaders (some output class info)
+        if isinstance(x0, tuple):
+            x0 = x0[0] 
         x0 = x0.to(args.device)
+
+        # get t, x0 xt
         t, tu = process.t()
-        xt = process.xt(x0, t.item())
+        xt = process.xt(x0, t)
 
         # get model output
         pred = model(xt, tu)
@@ -71,7 +70,7 @@ def cat_train(model, process, loader, opt, args):
             logits = process.Q_rev(logits, xt, t)
             
         # q(x_t-1 | xt, x0)
-        q_rev = process.Q_rev(x0, xt, t.item())
+        q_rev = process.Q_rev(x0, xt, t)
 
         # TODO: use torch kld; logits must be normalized... 
         loss_vb = (q_rev * (q_rev.log() - logits)).sum(1)

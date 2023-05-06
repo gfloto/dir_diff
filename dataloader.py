@@ -42,57 +42,65 @@ def mnist_dataset(batch_size, k, root='data/', num_workers=4, size=32):
 # based off of https://github.com/undercutspiky/Char_LM_PyTorch/blob/master/dataloader.py
 class Text8Dataset(Dataset):
     def __init__(self, chunk_size=256):
-        self.chunk_size = chunk_size
+        # to convert from character to index and back
         self.char2idx = {char: idx for idx, char in enumerate(
             ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', ' '])}
         self.idx2char = {idx: char for char, idx in self.char2idx.items()}
-        self.data = self.load_data()
-        # TODO: save this here... do later
-        # my potato laptop can't deal with this...
-        print('Data loaded.')
 
+        self.chunk_size = chunk_size
+        self.num_tok = len(self.char2idx)
+        self.data = self.load_data()
+
+    # download dataset if it doesn't exist, or load pt file
     def load_data(self):
-        # check if data exists otherwise make GET request to data URL string
         # if data exists, load data
-        if not os.path.exists('data/text8'):
+        if os.path.exists('data/text8.pt'):
+            print('Loading data...')
+            return torch.load('data/text8.pt')
+
+        # check if data exists otherwise make GET request to data URL string
+        else:
             if not os.path.exists('data'):
+                print('Downloading data...')
                 os.makedirs('data')
-            print('Downloading data...')
-            url = 'http://mattmahoney.net/dc/text8.zip'
-            r = requests.get(url, allow_redirects=True)
-            open('data/text8.zip', 'wb').write(r.content)
-            print('Download complete.')
+
+                url = 'http://mattmahoney.net/dc/text8.zip'
+                r = requests.get(url, allow_redirects=True)
+                open('data/text8.zip', 'wb').write(r.content)
+                print('Download complete.')
+
             # unzip data
+            print('Processing data...')
             import zipfile
             with zipfile.ZipFile('data/text8.zip', 'r') as zip_ref:
                 zip_ref.extractall('data')
-        # load data
-        with open('data/text8', 'r') as f:
-            data = f.read()
-        # split data into chunks
-        chunks = [data[i:i+self.chunk_size]
-                for i in range(0, len(data), self.chunk_size)]
-        # tokenize and encode chunks
-        encoded_chunks = []
-        for chunk in chunks:
-            tokens = list(chunk)
-            encoded_tokens = [self.char2idx[token] for token in tokens]
-            one_hot_encoded_tokens = F.one_hot(
-                torch.tensor(encoded_tokens), num_classes=len(self.char2idx))
-            encoded_chunks.append(one_hot_encoded_tokens)
-        return torch.stack(encoded_chunks)
+
+            # load data and split into chunks
+            with open('data/text8', 'r') as f:
+                data = f.read()
+            chunks = [data[i:i+self.chunk_size] for i in range(0, len(data), self.chunk_size)]
+
+            # tokenize and encode chunks
+            all_tokens = []
+            for i, chunk in enumerate(chunks):
+                tokens = [self.char2idx[character] for character in list(chunk)]
+                all_tokens.append(tokens)
+
+            # save for faster loading 
+            data = torch.tensor(all_tokens, dtype=torch.long)
+            torch.save(data, 'data/text8.pt')
+            return data
 
     def __getitem__(self, index):
         # load textual data
         text = self.data[index]
-        # transpose text to have shape [vocab_size, chunk_size]
-        text = text.transpose(0, 1)
-        return text
+        out = F.one_hot(text, num_classes=self.num_tok).type(torch.float32)
+        return rearrange(out, 'w k -> k w')
 
     def __len__(self):
-        return len(self.data)
+        return self.data.shape[0]
 
-
+# convenience
 def text8_dataset(batch_size, num_workers=4, chunk_size=256):
     text8_set = Text8Dataset(chunk_size=chunk_size)
     text8_loader = data.DataLoader(

@@ -27,7 +27,11 @@ if __name__ == '__main__':
     # save and print args
     save_args(args)
     print(f'device: {args.device}')
-    print(f'theta: {args.theta:.4f}, O: {args.O}, t-min: {args.t_min:.4f}, t-max: {args.t_max:.4f}')
+    
+    if args.proc_type == 'simplex':
+        print(f'theta: {args.theta:.4f}, O: {args.O}, t-min: {args.t_min:.4f}, t-max: {args.t_max:.4f}')
+    elif args.proc_type == 'cat':
+        print(f'q method: {args.q_method}, k: {args.k}, T: {args.T}, sparse: {args.p_sparse}, trunc: {args.trunc_logistic}')
 
     # load dataset
     if args.dataset == 'text8':
@@ -45,10 +49,7 @@ if __name__ == '__main__':
 
     # load process
     if args.proc_type == 'cat':
-        # TODO: make this args parameters?
-        T = 1000
-        betas = torch.linspace(1e-4, 0.02. T)
-        process = CatProcess(args.k, T, betas, args.device)
+        process = CatProcess(args)
     elif args.proc_type == 'simplex':
         process = Process(args)
 
