@@ -16,28 +16,52 @@ def sample(q, k):
 def mm(q, x):
     return torch.einsum('ik, bkwh -> biwh', q, x)
 
+# TODO: where are the embeddings coming from?
+def compute_knn_adjacency_matrix(embeddings, k):
+    # Compute the k-nearest neighbors of each word in the embedding space
+    nbrs = NearestNeighbors(n_neighbors=k, algorithm='ball_tree').fit(embeddings)
+    distances, indices = nbrs.kneighbors(embeddings)
+
+    # Construct the k-nearest neighbor adjacency matrix
+    n_words = embeddings.shape[0]
+    G = np.zeros((n_words, n_words))
+    for i in range(n_words):
+        G[i, indices[i]] = 1
+
+    return G
+
 '''
 process for default categorical diffusion
 see: https://arxiv.org/pdf/2107.03006.pdf
 '''
 
 class CatProcess:
-    def __init__(self, k, T, method, data_type, device):
-        self.k = k
-        self.T = T
-        self.method = method
-        self.data_type = data_type
-        self.device = device
+    def __init__(self, args):
+        self.k = args.k
+        self.T = args.T
+        self.method = args.q_method
+        self.device = args.device
 
-        self.betas = torch.linspace(1e-4, 0.02, T)
-        self.Q_bar = self.Q_bar(T)
+        self.betas = torch.linspace(1e-4, 0.02, self.T)
+        self.Q_bar = self.Q_bar(self.T).to(self.device)
+
+        if args.dataset in ['mnist', 'cifar10']:
+            self.data_type = 'image'
+        elif args.dataset in ['text8']:
+            self.data_type = 'text'
+
+    # get t, rescale to be in proper interval
+    def t(self):
+        t = torch.randint(self.T, (1,))
+        tu = t / self.T
+        return t.item(), tu.to(self.device)
 
     # forward process
     def xt(self, x0, t):
         # sample from q(xt | x0)
         p = mm(self.Q_bar[t], x0)
         xt = sample(p, self.k) 
-        return xt
+        return xt 
 
     # compute Qt transition matrix 
     def Q(self, t):
@@ -46,7 +70,7 @@ class CatProcess:
             b = self.betas[t]; k = self.k
             Qt = (1-b) * torch.eye(k) + b*torch.ones(k,k) / k
 
-        elif method == 'absorbing':
+        elif self.method == 'absorbing':
             # if the data is an image m is set to (128, 128, 128) at index K//2
             # if the data is text m is set to [MASK] at index K-1
             m = self.k // 2 if self.data_type == 'image' else self.k - 1
@@ -54,7 +78,7 @@ class CatProcess:
             Qt = (1 - beta_t) * torch.eye(self.k)
             Qt[:, m] += beta_t
 
-        elif method == 'gaussian':
+        elif self.method == 'gaussian':
             beta_t = self.betas[t]
             Qt = torch.zeros(self.k, self.k)
             beta_t = torch.tensor(beta_t)
@@ -63,6 +87,29 @@ class CatProcess:
             Qt = torch.exp(-4 * (i - j) ** 2 / ((self.k - 1) ** 2 * beta_t)) / normalization
             Qt[range(self.k), range(self.k)] = 0
             Qt[range(self.k), range(self.k)] = 1 - Qt.sum(dim=1)
+
+        elif self.method == 'knn':
+            # Compute the pairwise distances between all words in the embedding space
+            distances = torch.cdist(embeddings, embeddings)
+
+            # Find the k-nearest neighbors of each word
+            # Exclude the first nearest neighbor, which is the word itself
+            knn = distances.topk(k=k+1, dim=1, largest=False).indices[:, 1:]
+
+            # Construct the k-nearest neighbor adjacency matrix
+            n_words = embeddings.shape[0]
+            G = torch.zeros((n_words, n_words))
+            G.scatter_(1, knn, 1)
+
+            # Symmetrize the adjacency matrix
+            A = (G + G.T) / (2 * k)
+
+            # Construct the rate matrix R by modifying A directly
+            A[range(n_words), range(n_words)] = -A.sum(dim=1)
+
+            # Compute the transition matrix using a matrix exponential
+            alpha_t = alphas[t]
+            Qt = torch.matrix_exp(alpha_t * A) 
 
         return Qt.to(self.device)
 
@@ -76,7 +123,7 @@ class CatProcess:
         return Qt_bar
 
     # fill in later
-    def q_rev(self, x0, xt, t):
+    def Q_rev(self, x0, xt, t):
         num =  mm(self.Q(t).T, xt) * mm(self.Q_bar[t-1], x0)
         denom = torch.einsum('bkhw, bkhw -> bhw', xt, mm(self.Q_bar[t], x0))
         denom = torch.stack(self.k*[denom], dim=1)

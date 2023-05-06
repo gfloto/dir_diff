@@ -1,51 +1,12 @@
 import sys, os
-from tqdm import tqdm
 import torch
 import numpy as np
-from einops import repeat, rearrange
+from einops import repeat
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 
-from plot import make_gif
-
-def sig(y):
-    x_ = y.exp() / (1 + y.exp().sum(dim=1, keepdim=True))
-    return x_
-
-# generalized inverse sigmoid
-def sig_inv(x_):
-    xd = 1 - x_.sum(dim=1, keepdim=True)
-    y = x_.log() - xd.log()
-    return y
-
-# plot 2d or 3d scatter plot of distributions
-def plot(x, i, path):
-    d = x[0].shape[1]
-    if d == 2:
-        # plot 2d
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-
-        plt.scatter(x[0][:,0], x[0][:,1], s=2)
-        plt.scatter(x[1][:,0], x[1][:,1], s=2)
-
-    if d == 3:
-        # plot 3d
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.view_init(0.1*i, i-90)
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-        ax.set_zlim(0, 1)
-
-        ax.scatter(x[0][:, 0], x[0][:, 1], x[0][:,2], s=2)
-        ax.scatter(x[1][:, 0], x[1][:, 1], x[1][:,2], s=2)
-
-    #if i % 10 == 0: plt.show()
-    plt.legend(['OU', 'S'])
-    plt.savefig(path)
-    plt.close()
+from process import sig, sig_inv
+from plot import make_gif, scatter_plot
 
 # OU process in gaussian space, mapped back to simplex
 class GProcess:
@@ -68,7 +29,7 @@ class SProcess:
         self.steps = steps
         self.theta = theta
         self.d = s0.shape[0]
-        self.s = repeat(s0, 'd -> N d', N=N) 
+        self.s = repeat(s0, 'd -> N d w h', N=N, w=5, h=5) 
     
     # -theta * grad^T sig^-1(S)dt + 0.5h
     # this steps s by dt! not the same as GProcess
@@ -80,7 +41,7 @@ class SProcess:
         dB = np.sqrt(dt) * torch.randn_like(self.s)
 
         # update s
-        gdB = torch.einsum('b i j, b j -> b i', g, dB)
+        gdB = torch.einsum('b i j ..., b j ... -> b i ...', g, dB)
 
         update = f*dt + gdB
         self.s = self.s + update
@@ -89,29 +50,29 @@ class SProcess:
 
     # make drift term sde
     def sde_f(self, s):
-        b, k = s.shape[:2]
+        b, k, w, h = s.shape
 
         x = sig_inv(self.s)
         beta = -self.theta*x + 0.5*(1-2*s)
 
         # \sum_{i \neq j} X_{ij}, vectorized
-        beta_v = repeat(s*beta, 'b d -> b k d', k=self.d)
-        I = repeat(torch.eye(k), 'i j -> b i j', b=b).to(s.device)
-        bsum = torch.einsum('b i j, b i j -> b i', 1-I, beta_v)
+        beta_v = repeat(s*beta, 'b d ... -> b k d ...', k=self.d)
+        I = repeat(torch.eye(k), 'i j -> b i j w h', b=b, w=w, h=h).to(s.device)
+        bsum = torch.einsum('b i j ..., b i j ... -> b i ...', 1-I, beta_v)
 
         f = s * ( (1-s)*beta - bsum )
         return f
 
     # make diffusion term sde
     def sde_g(self, s):
-        b, k = s.shape[:2]
-        I = repeat(torch.eye(k), 'i j -> b i j', b=b).to(s.device)
+        b, k, w, h = s.shape
+        I = repeat(torch.eye(k), 'i j -> b i j w h', b=b, w=w, h=h).to(s.device)
 
-        neq = torch.einsum('b i, b j -> b i j', s, s)
-        eq = repeat(s*(1-s), 'b d -> b k d', k=self.d)
+        neq = torch.einsum('b i ..., b j ... -> b i j ...', s, s)
+        eq = repeat(s*(1-s), 'b d ... -> b k d ...', k=self.d)
 
-        g1 = torch.einsum('b i j, b i j -> b i j', I, eq)
-        g2 = torch.einsum('b i j, b i j -> b i j', 1-I, neq)
+        g1 = torch.einsum('b i j ..., b i j ... -> b i j ...', I, eq)
+        g2 = torch.einsum('b i j ..., b i j ... -> b i j ...', 1-I, neq)
 
         g = g1 - g2
         return g
@@ -134,7 +95,8 @@ if __name__ == '__main__':
         gxt = gproc(t[i])
 
         # plot together to compare
-        plot([gxt, sxt], i, f'imgs/{i}.png')
+        q = np.random.choice(2, 5, replace=True)
+        scatter_plot([gxt, sxt[:,:,q[0],q[1]]], i, f'imgs/{i}.png')
 
     make_gif('imgs', 'ito_check.gif', T)
 

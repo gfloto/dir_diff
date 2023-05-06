@@ -6,6 +6,7 @@ import imageio
 from PIL import Image
 from einops import rearrange
 import matplotlib.pyplot as plt
+plt.style.use('seaborn')
 
 from utils import onehot2cat
 
@@ -22,7 +23,7 @@ def make_gif(path, name, n):
 
 # visualize images
 # x can be list of tensors or tensor
-def save_vis(x, path, k=None, a=1, n=8):
+def save_vis(x, path, k=None, n=8):
     # if not list, make list (to make process the same)
     if not isinstance(x, list):
         x = [x]
@@ -32,13 +33,17 @@ def save_vis(x, path, k=None, a=1, n=8):
 
     # ensure x is in [0, 1]
     for i in range(len(x)):
-        x[i] = x[i] / a
         assert torch.all(x[i] >= 0)
-        assert torch.all(x[i] <= a)
+        assert torch.all(x[i] <= 1)
 
         # convert from onehot to categorical if required
         if len(x[i].shape) == 4: # ie. [b, k, h, w]
             assert k is not None
+            # concat xd
+            xd = 1 - torch.sum(x[i], dim=1, keepdim=True)
+            x[i] = torch.cat((x[i], xd), dim=1)
+
+            # convert to categorical
             x[i] = onehot2cat(x[i], k=k)
             x[i] = x[i] / (k-1)
 
@@ -53,7 +58,7 @@ def save_vis(x, path, k=None, a=1, n=8):
     img = x.detach().cpu().numpy()
 
     # save image
-    fig = plt.figure(figsize=(2*n, 4*imgs))
+    fig = plt.figure(figsize=(2*n, 2*imgs))
     plt.imshow(img, cmap='gray', vmin=0, vmax=1)
     plt.axis('off')
     plt.tight_layout()
@@ -66,3 +71,73 @@ def plot_loss(loss, path):
     plt.yscale('log')
     plt.savefig(os.path.join(path, 'loss.png'))
     plt.clf()
+
+# plot 2d or 3d scatter plot of distributions
+def scatter_plot(x, i, path):
+    # make list if not list
+    if not isinstance(x, list):
+        x = [x]
+
+    d = x[0].shape[1]
+    if d == 2:
+        # plot 2d
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+
+        for j in range(len(x)):
+            ax.scatter(x[j][:,0], x[j][:,1], s=2)
+
+    if d == 3:
+        # plot 3d
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.view_init(0.1*i+10, i-45)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_zlim(0, 1)
+
+        for j in range(len(x)):
+            ax.scatter(x[j][:,0], x[j][:,1], x[j][:,2], s=2)
+
+    #if i % 10 == 0: plt.show()
+    plt.savefig(path)
+    plt.close()
+
+# plot 2d or 3d vector field of distributions
+def vector_plot(x, i, path):
+    # make list if not list
+    if not isinstance(x, list):
+        x = [x]
+    
+    d = x[0].shape[2]
+    if d == 2:
+        # plot 2d
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+
+        # add color from default color cycle
+        for j in range(len(x)):
+            ax.quiver(x[j][0,:,0], x[j][0,:,1], x[j][1,:,0], x[j][1,:,1], 
+                       scale=1, scale_units='xy', angles='xy', width=0.002, color=f'C{j}')
+
+    if d == 3:
+        # plot 3d
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.view_init(0.1*i+10, i-45)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_zlim(0, 1)
+
+        # add color from default color cycle
+        for j in range(len(x)):
+            ax.quiver(x[j][0,:,0], x[j][0,:,1], x[j][0,:,2], x[j][1,:,0], x[j][1,:,1], x[j][1,:,2],
+                       color=f'C{j}')
+
+    #if i % 10 == 0: plt.show()
+    plt.savefig(path)
+    plt.close()

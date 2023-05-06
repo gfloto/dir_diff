@@ -19,12 +19,12 @@ def bdot(a, b):
     return torch.bmm(a.view(s1, 1, s2), b.view(s1, s2, 1)).reshape(-1)
 
 # log pdf of logit-gauss
-def log_p(x, mu=0, a=10, v=1):
+def log_p(x, mu=1, v=1):
     # ensure shapes are correct
     assert len(x.shape) == 2
 
     # x_ -> x
-    xd = a - x.sum(dim=1, keepdim=True)
+    xd = 1 - x.sum(dim=1, keepdim=True)
     x = torch.cat((x, xd), dim=1)
 
     # n = d-1
@@ -49,27 +49,17 @@ def log_p(x, mu=0, a=10, v=1):
     return log_p
 
 # score or grad log pdf
-def score(x, mu=0, a=10, v=1):
-    # ensure shapes are correct
-    assert len(x.shape) == 2
-
+def score(x_, mu=1, v=1):
     # x_ -> x
-    xd = a - x.sum(dim=1, keepdim=True)
-    x = torch.cat((x, xd), dim=1)
-
-    # n = d-1
-    n = x.shape[1] - 1
+    xd = 1 - x_.sum(dim=1, keepdim=True)
 
     # set mu to tensor
-    mu = mu * torch.ones(x.shape[0], n)
-
-    # sig_a_inv of normal
-    x_ = x[:, :-1]
-    xd = x[:, -1].unsqueeze(1)
+    k = x.shape[1]
+    mu = mu * torch.ones_like(x_)
 
     # constant factor
     c1 = 1/(xd.squeeze()) * (x_.log() - xd.log() - mu).sum(dim=1)
-    c1 = repeat(c1, 'b -> b k', k=n)
+    c1 = repeat(c1, 'b ... -> b k ...', k=k-1)
 
     # unique element-wise factor
     c2 = 1/(x_) * (x_.log() - xd.log() - mu)
@@ -84,38 +74,38 @@ def score(x, mu=0, a=10, v=1):
 # 2d plot of logit-gauss
 # TODO: I'm a coder noob and can't do partial application quickly...
 if __name__ == '__main__':
-    b = 5000
     # dist. params.
-    d = 3; a=10; v=1
+    b=200; k=3; h=32; w=32
+    v=1
 
     # get point on simplex
-    x = torch.rand(b, d)
+    x = torch.rand(b, k, h, w)
     x /= x.sum(dim=1, keepdim=True)
-    x *= a
 
     # remove x if any element in dim=1 is < c and > 1-c
-    c = 0.1*a
-    x = x[(x > c).all(dim=1) & (x < a-c).all(dim=1)]
-    x = x[:, :-1]
+    c = 0.1
+    #x = x[(x > c).all(dim=1) & (x < 1-c).all(dim=1)]
+    x = x[:, :-1, ...]
 
     # get log_p and score
-    lp = log_p(x)
-    sc = score(x)
-
+    # get 2 random ints
+    i, j = np.random.randint(0, h, 2)
     score = score(x)
-    glp = jacrev(log_p)(x) 
+    glp = jacrev(log_p)(x[:,:,i,j]) 
     glp = torch.diagonal(glp).T 
 
     # to numpy
     glp = -glp.detach().numpy()
     score = -score.detach().numpy()
+    score = score[:,:,i,j]
 
     # average diff between score and glp
     print(f'avg diff: {np.mean(np.abs(score - glp))}, std: {np.std(np.abs(score - glp))}')
     print(f'avg rel diff: {np.mean(np.abs(score - glp)/np.abs(score))}, avg rel std: {np.std(np.abs(score - glp)/np.abs(score))}')
 
-    if d != 3:
+    if k != 3:
         sys.exit(0)
+    x = x[:,:,i,j]
 
     # plot
     fig = plt.figure()

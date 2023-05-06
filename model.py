@@ -87,7 +87,8 @@ def Upsample(dim, dim_out = None):
 
 def Downsample(dim, dim_out = None):
     return nn.Sequential(
-        Rearrange('b c (h p1) (w p2) -> b (c p1 p2) h w', p1 = 1, p2 = 1),
+        #Rearrange('b c (h p1) (w p2) -> b (c p1 p2) h w', p1 = 1, p2 = 1),
+        Rearrange('b c (h p1) (w p2) -> b (c p1 p2) h w', p1 = 2, p2 = 2),
         nn.Conv2d(dim * 4, default(dim_out, dim), 1)
     )
 
@@ -516,8 +517,6 @@ class TransformerNetModel(nn.Module):
             h = input_trans_hidden_states
         h = h.type(x.dtype)
         return h
-
-
 
 if __name__ == "__main__":
     model = TransformerNetModel(emb_dim=256, vocab_size=27)
