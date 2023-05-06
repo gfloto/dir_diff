@@ -58,11 +58,12 @@ def cat_train(model, process, loader, opt, args):
         pred = model(xt, tu)
 
         # option to output params of truncated logistic distribution
-        if args.trun_log:
+        if args.trunc_logistic:
             loc, log_scale = pred
-            logits = get_logits_from_logistic_pars(loc, log_scale, args.k)
             # TODO: are these normalized??
+            logits = get_logits_from_logistic_pars(loc, log_scale, args.k)
         else:
+            # TODO: some missing detail here!!
             logits = log_softmax(pred, dim=1)
 
         # option to output p(x0 | xt) and get p(x_t | xt) from that
