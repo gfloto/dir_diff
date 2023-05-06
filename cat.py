@@ -8,13 +8,13 @@ from utils import cat2onehot
 
 # useful sampling function
 def sample(q, k):
-    q = rearrange(q, 'b k h w -> b h w k')
+    q = rearrange(q, 'b k ... -> b ... k')
     out = dist.Categorical(q).sample()
-    return cat2onehot(out, k=k)
+    return cat2onehot(out, k=k, shape=q.shape)
 
 # shortname for using einsum
 def mm(q, x):
-    return torch.einsum('ik, bkwh -> biwh', q, x)
+    return torch.einsum('ik, bk... -> bi...', q, x)
 
 # TODO: where are the embeddings coming from?
 def compute_knn_adjacency_matrix(embeddings, k):
@@ -125,7 +125,7 @@ class CatProcess:
     # fill in later
     def Q_rev(self, x0, xt, t):
         num =  mm(self.Q(t).T, xt) * mm(self.Q_bar[t-1], x0)
-        denom = torch.einsum('bkhw, bkhw -> bhw', xt, mm(self.Q_bar[t], x0))
+        denom = torch.einsum('bk..., bk... -> b...', xt, mm(self.Q_bar[t], x0))
         denom = torch.stack(self.k*[denom], dim=1)
         out = num / denom
 

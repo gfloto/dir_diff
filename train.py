@@ -10,9 +10,13 @@ def train(model, process, loader, opt, args):
     device = args.device; k = args.k
     model.train()
     loss_track = []
-    for i, (x0, _) in enumerate(tqdm(loader)):
-        # get t, x0 xt
+    for i, x0 in enumerate(tqdm(loader)):
+        # difference in dataloaders (some output class info)
+        if isinstance(x0, tuple):
+            x0 = x0[0] 
         x0 = x0.to(args.device)
+
+        # get t, x0 xt
         t, tu = process.t() # get scaled and unscaled t
         xt, mu, var = process.xt(x0, t)
 
@@ -48,11 +52,10 @@ def cat_train(model, process, loader, opt, args):
         if isinstance(x0, tuple):
             x0 = x0[0] 
         x0 = x0.to(args.device)
-        print(x0.shape)
 
         # get t, x0 xt
         t, tu = process.t()
-        xt = process.xt(x0, t)
+        xt = process.xt(x0, t) 
 
         # get model output
         pred = model(xt, tu)

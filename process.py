@@ -5,6 +5,7 @@ import numpy as np
 from einops import repeat
 import matplotlib.pyplot as plt
 
+from utils import identity_tensor
 from plot import save_vis
 from dataloader import mnist_dataset
 
@@ -100,7 +101,7 @@ class Process:
 
         # \sum_{i \neq j} X_{ij}, vectorized
         beta_v = repeat(s*beta, 'b d ... -> b k d ...', k=self.k-1)
-        I = repeat(torch.eye(k), 'i j -> b i j w h', b=b, w=w, h=h).to(s.device)
+        I = identity_tensor(s)
         bsum = torch.einsum('b i j ..., b i j ... -> b i ...', 1-I, beta_v)
 
         f = s * ( (1-s)*beta - bsum )
@@ -108,9 +109,8 @@ class Process:
 
     # make diffusion term sde
     def sde_g(self, s):
-        # TODO: make this general later...
-        b, k, w, h = s.shape
-        I = repeat(torch.eye(k), 'i j -> b i j w h', b=b, w=w, h=h).to(s.device)
+        b, k = s.shape[:2]
+        I = identity_tensor(s)
 
         neq = torch.einsum('b i ..., b j ... -> b i j ...', s, s)
         eq = repeat(s*(1-s), 'b d ... -> b k d ...', k=self.k-1)
