@@ -35,7 +35,7 @@ if __name__ == '__main__':
 
     # load dataset
     if args.dataset == 'text8':
-        loader = text8_dataset(batch_size=args.batch_size)
+        loader = text8_dataset(args.batch_size)
     elif args.dataset == 'mnist':
         loader = mnist_dataset(args.batch_size, args.k)
     elif args.dataset == 'cifar10':

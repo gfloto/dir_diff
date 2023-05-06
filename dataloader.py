@@ -87,14 +87,14 @@ class Text8Dataset(Dataset):
                 all_tokens.append(tokens)
 
             # save for faster loading 
-            data = torch.tensor(all_tokens, dtype=torch.long)
+            data = torch.tensor(all_tokens, dtype=torch.uint8)
             torch.save(data, 'data/text8.pt')
             return data
 
     def __getitem__(self, index):
         # load textual data
         text = self.data[index]
-        out = F.one_hot(text, num_classes=self.num_tok).type(torch.float32)
+        out = F.one_hot(text.long(), num_classes=self.num_tok).type(torch.float32)
         return rearrange(out, 'w k -> k w')
 
     def __len__(self):
