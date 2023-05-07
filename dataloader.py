@@ -16,7 +16,7 @@ from torch.functional import F
 
 # convert to onehot encoding with k categories
 class Onehot(object):
-    def __init__(self, k=10):
+    def __init__(self, k):
         self.k = k
 
     def __call__(self, x):
@@ -26,14 +26,14 @@ class Onehot(object):
         return rearrange(x, 'h w k -> k h w')
 
 class OnehotRGB(object):
-    def __init__(self, k=10):
+    def __init__(self, k):
         self.k = k
 
     def __call__(self, x):
         x *= self.k-1
-        x = torch.round(x).squeeze().type(torch.int64)  # remove channel dim
+        x = torch.round(x).type(torch.int64)  # remove channel dim
         x = one_hot(x, num_classes=self.k).type(torch.float32)
-        return rearrange(x, 'c h w k -> c k h w')
+        return rearrange(x, 'c h w k -> k c h w')
 
 # return mnist dataset
 def mnist_dataset(batch_size, k, root='data/', num_workers=4, size=32):
@@ -47,9 +47,9 @@ def mnist_dataset(batch_size, k, root='data/', num_workers=4, size=32):
         mnist_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     return mnist_loader
 
+# return cifar 10 dataset
 def cifar10_dataset(batch_size, k, root='data/', num_workers=4, size=32):
     transform = transforms.Compose([
-        transforms.Resize((size, size)),
         transforms.ToTensor(),
         OnehotRGB(k)
     ])
@@ -59,14 +59,12 @@ def cifar10_dataset(batch_size, k, root='data/', num_workers=4, size=32):
         cifar10_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     return cifar10_loader
 
-def test_cifar10_dataset():
-    batch_size = 4
-    k = 10
-    cifar10_loader = cifar10_dataset(batch_size, k)
-    data_iter = iter(cifar10_loader)
-    images, labels = next(data_iter)
-    assert images.shape == (batch_size, 3, k, 32, 32)
-    assert labels.shape == (batch_size,)
+# return text 8 dataset
+def text8_dataset(batch_size, num_workers=4, chunk_size=256):
+    text8_set = Text8Dataset(chunk_size=chunk_size)
+    text8_loader = data.DataLoader(
+        text8_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    return text8_loader
 
 # text8 dataset
 # data available at "http://mattmahoney.net/dc/text8.zip"
@@ -130,12 +128,14 @@ class Text8Dataset(Dataset):
     def __len__(self):
         return self.data.shape[0]
 
-# convenience
-def text8_dataset(batch_size, num_workers=4, chunk_size=256):
-    text8_set = Text8Dataset(chunk_size=chunk_size)
-    text8_loader = data.DataLoader(
-        text8_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    return text8_loader
+def test_cifar10_dataset():
+    batch_size = 4
+    k = 10
+    cifar10_loader = cifar10_dataset(batch_size, k)
+    data_iter = iter(cifar10_loader)
+    images, labels = next(data_iter)
+    assert images.shape == (batch_size, 3, k, 32, 32)
+    assert labels.shape == (batch_size,)
 
 # TODO: check output of this...
 if __name__ == "__main__":

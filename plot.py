@@ -23,7 +23,7 @@ def make_gif(path, name, n):
 
 # visualize images
 # x can be list of tensors or tensor
-def save_vis(x, path, k=None, n=8):
+def save_vis(x, path, k, n=8):
     # if not list, make list (to make process the same)
     if not isinstance(x, list):
         x = [x]
@@ -36,23 +36,28 @@ def save_vis(x, path, k=None, n=8):
         assert torch.all(x[i] >= 0)
         assert torch.all(x[i] <= 1)
 
-        # convert from onehot to categorical if required
-        if len(x[i].shape) == 4: # ie. [b, k, h, w]
-            assert k is not None
-            # concat xd
-            xd = 1 - torch.sum(x[i], dim=1, keepdim=True)
-            x[i] = torch.cat((x[i], xd), dim=1)
+        # convert from onehot to categorical
+        xd = 1 - torch.sum(x[i], dim=1, keepdim=True)
+        x[i] = torch.cat((x[i], xd), dim=1)
 
-            # convert to categorical
-            x[i] = onehot2cat(x[i], k=k)
-            x[i] = x[i] / (k-1)
+        # convert to categorical
+        x[i] = onehot2cat(x[i], k=k)
+        x[i] = x[i] / (k-1)
 
     # stitch list using einops
     imgs = len(x)
     for i in range(len(x)):
-        x[i] = rearrange(x[i][:n], 'b h w -> h (b w)', b=n)
+        if len(x[i].shape) == 3: # ie. [b, h, w]
+            x[i] = rearrange(x[i][:n], 'b h w -> h (b w)', b=n)
+        elif len(x[i].shape) == 4: # ie. [b, k, h, w]
+            x[i] = rearrange(x[i][:n], 'b c h w -> c h (b w)', b=n)
+
+    # reshape into final image
     x = torch.stack(x)
-    x = rearrange(x, 'b h w -> (b h) w', b=imgs)
+    if len(x.shape) == 3:
+        x = rearrange(x, 'b h w -> (b h) w', b=imgs)
+    elif len(x.shape) == 4:
+        x = rearrange(x, 'b c h w -> (b h) w c', b=imgs)
 
     # convert to numpy and save
     img = x.detach().cpu().numpy()

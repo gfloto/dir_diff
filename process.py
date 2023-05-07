@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 
 from utils import identity_tensor
 from plot import save_vis
-from dataloader import mnist_dataset
 
 # TODO: these transformations are biased!!
 # map from R^k -> simplex
@@ -128,13 +127,20 @@ testing scripts for process and time sampler
 from tqdm import tqdm
 from args import get_args
 from plot import make_gif
+from dataloader import mnist_dataset, cifar10_dataset
 
 if __name__ == '__main__':
     N = 100 # number of steps
+    dataset = 'cifar10'
 
     # get device, data and process
     args = get_args()
-    loader = mnist_dataset(8, args.k)
+    if args.dataset == 'text8':
+        pass
+    elif args.dataset == 'mnist':
+        loader = mnist_dataset(args.batch_size, args.k)
+    elif args.dataset == 'cifar10':
+        loader = cifar10_dataset(args.batch_size, args.k)
     process = Process(args)
 
     # test forward process
@@ -152,6 +158,6 @@ if __name__ == '__main__':
         save_vis(xt, f'imgs/{i}.png', k=args.k)
 
     # make gif of forward process
-    make_gif('imgs', 'results/forward.gif', N)
+    make_gif('imgs', f'results/forward_{dataset}.gif', N)
 
 

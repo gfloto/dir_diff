@@ -21,7 +21,6 @@ from einops.layers.torch import Rearrange
 from PIL import Image
 from tqdm.auto import tqdm
 
-from torchinfo import summary
 from transformers import AutoConfig
 from transformers.models.bert.modeling_bert import BertEncoder, BertModel
 
@@ -518,7 +517,8 @@ class Transformer(nn.Module):
         h = h.type(x.dtype)
         return h
 
+#from torchinfo import summary
 if __name__ == "__main__":
     model = Transformer(emb_dim=256, vocab_size=27)
     fake_data = torch.rand(1, 27, 256)
-    summary(model, input_data=[fake_data, torch.tensor([1])])
+    #summary(model, input_data=[fake_data, torch.tensor([1])])

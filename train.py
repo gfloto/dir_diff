@@ -3,6 +3,7 @@ from tqdm import tqdm
 import torch
 import numpy as np
 from torch.nn.functional import log_softmax, cross_entropy
+from einops import rearrange
 
 from utils import ptnp
 
@@ -12,7 +13,7 @@ def train(model, process, loader, opt, args):
     loss_track = []
     for i, x0 in enumerate(tqdm(loader)):
         # difference in dataloaders (some output class info)
-        if isinstance(x0, tuple):
+        if isinstance(x0, tuple) or isinstance(x0, list):
             x0 = x0[0] 
         x0 = x0.to(args.device)
 
@@ -23,8 +24,16 @@ def train(model, process, loader, opt, args):
         # learn g^2 score instead of score 
         g2_score = process.g2_score(xt, mu, var)
 
+        # if color image: [b, k, c, h, w] -> [b, k*c, h, w]
+        if len(x0.shape) == 5: # reshape to fit Unet
+            xt = rearrange(xt, 'b k c ... -> b (k c) ...')
+
         # predict g^2 score
         score_out = model(xt, tu)
+
+        # TODO: move this operation into Unet model...
+        if len(x0.shape) == 5:
+            score_out = rearrange(score_out, 'b (k c) ... -> b k c ...', c=3)
 
         # loss
         loss = (score_out - g2_score).pow(2).mean()
@@ -81,6 +90,7 @@ def cat_train(model, process, loader, opt, args):
 
         # option to do aux loss
         if args.lmbda is not None:
+            # TODO: what is going on here?
             loss_aux = cross_entropy(logits, onehot_to_int(q_rev)).sum(1)
             loss = loss_vb + args.lmda*loss_aux 
         else:

@@ -24,11 +24,9 @@ def cat2onehot(x, k, shape):
 
     # TODO: there should be a better way to write this...
     if len(shape) == 3:
-        b, k, w = x.shape
-        return rearrange(x, 'b w k -> b k w', w=w)
+        return rearrange(x, 'b w k -> b k w')
     elif len(shape) == 4:
-        b, k, w, h = x.shape
-        return rearrange(x, 'b w h k -> b k h w', w=w, h=h)
+        return rearrange(x, 'b w h k -> b k h w')
 
 # useful function for returning an identity tensor
 # if input is [b, k, ...] then it returns identity over i,j with [b, i, j] (i, j and k same size) 
@@ -44,6 +42,9 @@ def identity_tensor(x):
     elif len(shape) == 4:
         b, k, w, h = x.shape
         return repeat(eye, 'i j -> b i j w h', b=b, w=w, h=h).to(x.device)
+    elif len(shape) == 5:
+        b, k, c, w, h = x.shape
+        return repeat(eye, 'i j -> b i j c w h', b=b, c=c, w=w, h=h).to(x.device)
 
 # TODO: eventually move this to metrics.py or smthn
 def calculate_perplexity(model, data):

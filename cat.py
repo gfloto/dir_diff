@@ -148,8 +148,6 @@ if __name__ == '__main__':
         loader = text8_dataset(8)
 
     (x, _) = next(iter(loader))
-    print(x)
-    sys.exit()
 
     for method in methods:
         x0 = x.clone().to(device)
