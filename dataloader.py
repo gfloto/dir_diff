@@ -78,7 +78,7 @@ class Text8Dataset(Dataset):
 
         self.chunk_size = chunk_size
         self.num_tok = len(self.char2idx)
-        self.data = self.load_data()
+        self.data = self.load_data() 
 
     # download dataset if it doesn't exist, or load pt file
     def load_data(self):

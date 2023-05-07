@@ -2,10 +2,10 @@ import sys, os
 from tqdm import tqdm
 import torch
 import numpy as np
-from torch.nn.functional import log_softmax, cross_entropy
+from torch.nn.functional import log_softmax, cross_entropy, kl_div
 from einops import rearrange
 
-from utils import ptnp
+from utils import ptnp, onehot2cat
 
 def train(model, process, loader, opt, args):
     device = args.device; k = args.k
@@ -71,27 +71,29 @@ def cat_train(model, process, loader, opt, args):
 
         # option to output params of truncated logistic distribution
         if args.trunc_logistic:
+            raise NotImplementedError
+
+            # throw not implimented error
             loc, log_scale = pred
-            # TODO: are these normalized??
             logits = get_logits_from_logistic_pars(loc, log_scale, args.k)
         else:
-            # TODO: some missing detail here!!
             logits = log_softmax(pred, dim=1)
 
         # option to output p(x0 | xt) and get p(x_t | xt) from that
         if args.sparse_cat:
             logits = process.Q_rev(logits, xt, t)
-            
+            # normalize s.t. logits.exp().sum(1) = 1
+            logits = logits - logits.logsumexp(1, keepdim=True)
+
         # q(x_t-1 | xt, x0)
         q_rev = process.Q_rev(x0, xt, t)
 
-        # TODO: use torch kld; logits must be normalized... 
-        loss_vb = (q_rev * (q_rev.log() - logits)).sum(1)
+        # variational bound loss for discrete diffusion
+        loss_vb = kl_div(logits, q_rev, reduction='none').mean()
 
         # option to do aux loss
         if args.lmbda is not None:
-            # TODO: what is going on here?
-            loss_aux = cross_entropy(logits, onehot_to_int(q_rev)).sum(1)
+            loss_aux = cross_entropy(logits, onehot2cat(x0), reduction='none').mean()
             loss = loss_vb + args.lmda*loss_aux 
         else:
             loss = loss_vb 

@@ -3,7 +3,6 @@ import torch
 import torch.distributions as dist
 from einops import rearrange
 
-from plot import save_vis, make_gif
 from utils import cat2onehot
 
 # useful sampling function
@@ -45,10 +44,15 @@ class CatProcess:
         self.betas = torch.linspace(1e-4, 0.02, self.T)
         self.Q_bar = self.Q_bar(self.T).to(self.device)
 
+        # useful attributes
         if args.dataset in ['mnist', 'cifar10']:
             self.data_type = 'image'
+
         elif args.dataset in ['text8']:
             self.data_type = 'text'
+            self.char2idx = {char: idx for idx, char in enumerate(
+                ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', ' '])}
+            self.idx2char = {idx: char for char, idx in self.char2idx.items()}
 
     # get t, rescale to be in proper interval
     def t(self):
@@ -131,44 +135,59 @@ class CatProcess:
 
         return out 
 
-from dataloader import mnist_dataset, text8_dataset
+    # one-hot text to string
+    def decode_text(self, encoded_text):
+        # Convert one-hot encoding to indices
+        indices = torch.argmax(encoded_text, dim=1)
+
+        # Convert indices to characters using the idx2char dictionary
+        decoded_text = [''.join([self.idx2char[idx.item()]
+                                for idx in example]) for example in indices]
+        return decoded_text 
+
+from tqdm import tqdm
+from args import get_args
+from plot import save_vis, make_gif
+from dataloader import text8_dataset, mnist_dataset, cifar10_dataset
 
 # test noising process
 if __name__ == '__main__':
-    k = 10; T = 500; 
-    data_type = 'text'
-    methods = ['uniform', 'gaussian']
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    chars = 50
+    # get device, data and process
+    args = get_args()
+    if args.dataset == 'text8':
+        loader = text8_dataset(args.batch_size)
+    elif args.dataset == 'mnist':
+        loader = mnist_dataset(args.batch_size, args.k)
+    elif args.dataset == 'cifar10':
+        loader = cifar10_dataset(args.batch_size, args.k)
+    process = CatProcess(args)
 
-    # get data  
-    if data_type == 'image':
-        loader = mnist_dataset(8, k)
-    elif data_type == 'text':
-        k = 27
-        loader = text8_dataset(8)
+    # get x0
+    x0 = next(iter(loader))
+    if isinstance(x0, tuple) or isinstance(x0, list):
+        x0 = x0[0] 
+    x0 = x0.to(args.device)
 
-    (x, _) = next(iter(loader))
+    # print initial text
+    if process.data_type == 'text':
+        print(f't: {0:.3f}, text: {process.decode_text(x0)[0][:chars]}')
 
-    for method in methods:
-        x0 = x.clone().to(device)
+    # test forward process
+    os.makedirs('imgs', exist_ok=True)
+    for t in range(args.T):
+        qbar = process.Q_bar[t]
 
-        # get process
-        process = CatProcess(k, T, method, data_type, device)
+        # apply qbar to x0
+        xt = process.xt(x0, t)
 
-        # test forward process
-        r = 10
-        print(f'running {method} forward process...')
-        os.makedirs('imgs', exist_ok=True)
-        for t in range(T):
-            qbar = process.Q_bar[t]
+        # save image
+        if process.data_type == 'image':
+            save_vis(xt, f'imgs/{t}.png', k=args.k)
+        else:
+            print(f't: {t/args.T:.3f}, text: {process.decode_text(xt)[0][:chars]}')
 
-            # apply qbar to x0
-            xt = process.xt(x0, t)
-
-            # save image
-            if t % r == 0:
-                save_vis(xt, f'imgs/{int(t/r)}.png', k=k, n=8)
-
-        # make gif of forward process
-        make_gif('imgs', f'results/cat_{method}.gif', T//r)
+    # make gif of forward process
+    if process.data_type == 'image':
+        make_gif('imgs', f'results/forward_cat_{args.dataset}_{args.q_method}.gif', args.T)
 
