@@ -1,4 +1,6 @@
-import sys, os
+from dataloader import mnist_dataset, text8_dataset
+import sys
+import os
 import torch
 import torch.distributions as dist
 from einops import rearrange
@@ -7,19 +9,26 @@ from plot import save_vis, make_gif
 from utils import cat2onehot
 
 # useful sampling function
+
+
 def sample(q, k):
     q = rearrange(q, 'b k ... -> b ... k')
     out = dist.Categorical(q).sample()
     return cat2onehot(out, k=k, shape=q.shape)
 
 # shortname for using einsum
+
+
 def mm(q, x):
     return torch.einsum('ik, bk... -> bi...', q, x)
 
 # TODO: where are the embeddings coming from?
+
+
 def compute_knn_adjacency_matrix(embeddings, k):
     # Compute the k-nearest neighbors of each word in the embedding space
-    nbrs = NearestNeighbors(n_neighbors=k, algorithm='ball_tree').fit(embeddings)
+    nbrs = NearestNeighbors(
+        n_neighbors=k, algorithm='ball_tree').fit(embeddings)
     distances, indices = nbrs.kneighbors(embeddings)
 
     # Construct the k-nearest neighbor adjacency matrix
@@ -30,25 +39,32 @@ def compute_knn_adjacency_matrix(embeddings, k):
 
     return G
 
+
 '''
 process for default categorical diffusion
 see: https://arxiv.org/pdf/2107.03006.pdf
 '''
 
+
 class CatProcess:
     def __init__(self, args):
-        self.k = args.k
-        self.T = args.T
-        self.method = args.q_method
-        self.device = args.device
+        print("CatProcess args:", args)
+        self.k = args["k"]
+        self.T = args["T"]
+        self.method = args["q_method"]
+        self.device = args["device"]
+        self.debug = args["debug"]
 
         self.betas = torch.linspace(1e-4, 0.02, self.T)
         self.Q_bar = self.Q_bar(self.T).to(self.device)
 
-        if args.dataset in ['mnist', 'cifar10']:
+        if args["dataset"] in ['mnist', 'cifar10']:
             self.data_type = 'image'
-        elif args.dataset in ['text8']:
+        elif args["dataset"] in ['text8']:
             self.data_type = 'text'
+            self.char2idx = {char: idx for idx, char in enumerate(
+                ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', ' '])}
+            self.idx2char = {idx: char for char, idx in self.char2idx.items()}
 
     # get t, rescale to be in proper interval
     def t(self):
@@ -60,15 +76,19 @@ class CatProcess:
     def xt(self, x0, t):
         # sample from q(xt | x0)
         p = mm(self.Q_bar[t], x0)
-        xt = sample(p, self.k) 
-        return xt 
+        xt = sample(p, self.k)
 
-    # compute Qt transition matrix 
+        if self.debug and t % 100 == 0:
+            print(self.decode_text(xt))
+        return xt
+
+    # compute Qt transition matrix
     def Q(self, t):
         method = self.method
         if method == 'uniform':
-            b = self.betas[t]; k = self.k
-            Qt = (1-b) * torch.eye(k) + b*torch.ones(k,k) / k
+            b = self.betas[t]
+            k = self.k
+            Qt = (1-b) * torch.eye(k) + b*torch.ones(k, k) / k
 
         elif self.method == 'absorbing':
             # if the data is an image m is set to (128, 128, 128) at index K//2
@@ -82,9 +102,11 @@ class CatProcess:
             beta_t = self.betas[t]
             Qt = torch.zeros(self.k, self.k)
             beta_t = torch.tensor(beta_t)
-            normalization = torch.sum(torch.exp(-4 * (torch.arange(-(self.k - 1), self.k) ** 2) / ((self.k - 1) ** 2 * beta_t)))
+            normalization = torch.sum(
+                torch.exp(-4 * (torch.arange(-(self.k - 1), self.k) ** 2) / ((self.k - 1) ** 2 * beta_t)))
             i, j = torch.meshgrid(torch.arange(self.k), torch.arange(self.k))
-            Qt = torch.exp(-4 * (i - j) ** 2 / ((self.k - 1) ** 2 * beta_t)) / normalization
+            Qt = torch.exp(-4 * (i - j) ** 2 / ((self.k - 1)
+                           ** 2 * beta_t)) / normalization
             Qt[range(self.k), range(self.k)] = 0
             Qt[range(self.k), range(self.k)] = 1 - Qt.sum(dim=1)
 
@@ -109,7 +131,7 @@ class CatProcess:
 
             # Compute the transition matrix using a matrix exponential
             alpha_t = alphas[t]
-            Qt = torch.matrix_exp(alpha_t * A) 
+            Qt = torch.matrix_exp(alpha_t * A)
 
         return Qt.to(self.device)
 
@@ -117,45 +139,57 @@ class CatProcess:
     def Q_bar(self, t):
         Qt_bar = torch.zeros((t, self.k, self.k)).to(self.device)
         Qt_bar[0] = self.Q(0)
-        for i in range(1,t):
+        for i in range(1, t):
             Qt = self.Q(i)
             Qt_bar[i] = Qt_bar[i-1] @ Qt
         return Qt_bar
 
     # fill in later
     def Q_rev(self, x0, xt, t):
-        num =  mm(self.Q(t).T, xt) * mm(self.Q_bar[t-1], x0)
+        num = mm(self.Q(t).T, xt) * mm(self.Q_bar[t-1], x0)
         denom = torch.einsum('bk..., bk... -> b...', xt, mm(self.Q_bar[t], x0))
         denom = torch.stack(self.k*[denom], dim=1)
         out = num / denom
 
-        return out 
+        return out
 
-from dataloader import mnist_dataset, text8_dataset
+    def decode_text(self, encoded_text):
+        # Convert one-hot encoding to indices
+        indices = torch.argmax(encoded_text, dim=1)
+
+        # Convert indices to characters using the idx2char dictionary
+        decoded_text = [''.join([self.idx2char[idx.item()]
+                                for idx in example]) for example in indices]
+
+        return decoded_text
+
 
 # test noising process
 if __name__ == '__main__':
-    k = 10; T = 500; 
+    k = 10
+    T = 500
     data_type = 'text'
     methods = ['uniform', 'gaussian']
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # get data  
+    # get data
     if data_type == 'image':
         loader = mnist_dataset(8, k)
     elif data_type == 'text':
         k = 27
         loader = text8_dataset(8)
 
-    (x, _) = next(iter(loader))
-    print(x)
-    sys.exit()
+    x = next(iter(loader))
+    # print(x)
+    # sys.exit()
+
+    args = {'k': k, 'T': T, 'q_method': 'uniform',
+            'dataset': "text8", 'device': device, 'debug': True}
 
     for method in methods:
         x0 = x.clone().to(device)
-
         # get process
-        process = CatProcess(k, T, method, data_type, device)
+        process = CatProcess(args)
 
         # test forward process
         r = 10
@@ -173,4 +207,3 @@ if __name__ == '__main__':
 
         # make gif of forward process
         make_gif('imgs', f'results/cat_{method}.gif', T//r)
-
