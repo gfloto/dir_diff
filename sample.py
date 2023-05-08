@@ -10,7 +10,7 @@ from dataloader import cifar10_dataset, mnist_dataset, text8_dataset
 from model import Unet
 from process import sig, Process 
 from plot import save_vis, make_gif
-from utils import save_path
+from utils import onehot2cat, save_path
 
 from bayes_opt import BayesianOptimization
 from bayes_opt.logger import JSONLogger
@@ -131,7 +131,10 @@ class Sampler:
             if save_path is not None:
                 make_gif('imgs', save_path, int(T/d)+10)
 
-        return x
+        x = onehot2cat(x, args.k)
+        if args.dataset == 'mnist':
+            x = repeat(x, 'b w h -> b c w h', c=3)
+        return x.to(dtype=torch.float32)
 
 class WrapperInceptionV3(nn.Module):
     def __init__(self, fid_incv3):
@@ -151,7 +154,7 @@ def sampler_wrapper(model, T, order, g_scale_alpha, g_scale_beta, batch_size=8):
     order = 1 if order < 1.5 else 2
     for i in range(num_samples_run):
         # sample from model
-        sampler = Sampler(args, batch_size=256, device=device, fast=True)
+        sampler = Sampler(args, batch_size=args.batch_size, device=device, fast=True)
         result = sampler(model, T=T, g_scale_beta=g_scale_beta, g_scale_alpha=g_scale_alpha, save_path=save_path(args, 'sample.gif'))
         results.append(result)
     return results
@@ -179,7 +182,6 @@ def compute_fid_score(model_results):
     pytorch_fid_metric = FID(num_features=dims, feature_extractor=wrapper_model)
 
     real_batch = interpolate(next(iter(loader))[0])
-    print(f"real_batch shape: {real_batch.shape}")
      # Convert model_results to tensor and move to device
     model_results = interpolate(torch.tensor(model_results).to(device))
     
