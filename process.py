@@ -6,7 +6,6 @@ from einops import repeat
 import matplotlib.pyplot as plt
 
 from utils import identity_tensor
-from plot import save_vis
 
 # TODO: these transformations are biased!!
 # map from R^k -> simplex
@@ -34,6 +33,16 @@ class Process:
 
         self.k = args.k
         self.device = args.device
+
+        # useful attributes
+        if args.dataset in ['mnist', 'cifar10']:
+            self.data_type = 'image'
+
+        elif args.dataset in ['text8']:
+            self.data_type = 'text'
+            self.char2idx = {char: idx for idx, char in enumerate(
+                ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', ' '])}
+            self.idx2char = {idx: char for char, idx in self.char2idx.items()}
 
     # get t, rescale to be in proper interval
     def t(self):
@@ -120,23 +129,35 @@ class Process:
         g = g1 - g2
         return g
 
+    # one-hot text to string
+        # add last component
+    def decode_text(self, encoded_text):
+        xd = 1 - torch.sum(encoded_text, dim=1, keepdim=True)
+        encoded_text = torch.cat((encoded_text, xd), dim=1)
+
+        # Convert one-hot encoding to indices
+        indices = torch.argmax(encoded_text, dim=1)
+
+        # Convert indices to characters using the idx2char dictionary
+        decoded_text = [''.join([self.idx2char[idx.item()]
+                                for idx in example]) for example in indices]
+        return decoded_text 
+
 '''
 testing scripts for process and time sampler
 '''
 
 from tqdm import tqdm
 from args import get_args
-from plot import make_gif
-from dataloader import mnist_dataset, cifar10_dataset
+from plot import make_gif, save_vis
+from dataloader import text8_dataset, mnist_dataset, cifar10_dataset
 
 if __name__ == '__main__':
-    N = 100 # number of steps
-    dataset = 'cifar10'
-
+    N = 20; chars = 50
     # get device, data and process
     args = get_args()
     if args.dataset == 'text8':
-        pass
+        loader = text8_dataset(args.batch_size)
     elif args.dataset == 'mnist':
         loader = mnist_dataset(args.batch_size, args.k)
     elif args.dataset == 'cifar10':
@@ -145,19 +166,28 @@ if __name__ == '__main__':
 
     # test forward process
     t = torch.linspace(args.t_min, args.t_max, N).to(args.device)
-    (x0, _) = next(iter(loader))
-    x0 = x0.to(args.device)
 
-    print('running forward process...')
-    os.makedirs('imgs', exist_ok=True)
+    # get x0
+    x0 = next(iter(loader))
+    if isinstance(x0, tuple) or isinstance(x0, list):
+        x0 = x0[0] 
+    x0 = x0.to(args.device)
+   
+    # print initial text
+    if process.data_type == 'text':
+        print(f't: {0:.3f}, text: {process.decode_text(x0)[0][:chars]}')
 
     # get forward process at each t
-    for i in tqdm(range(N)):
+    os.makedirs('imgs', exist_ok=True)
+    for i in range(N):
         # generate and save image
         xt, _, _ = process.xt(x0.clone(), t[i])
-        save_vis(xt, f'imgs/{i}.png', k=args.k)
+
+        if process.data_type == 'image':
+            save_vis(xt, f'imgs/{i}.png', k=args.k)
+        else:
+            print(f't: {t[i]:.3f}, text: {process.decode_text(xt)[0][:chars]}')
 
     # make gif of forward process
-    make_gif('imgs', f'results/forward_{dataset}.gif', N)
-
-
+    if process.data_type == 'image':
+        make_gif('imgs', f'results/forward_simplex_{args.dataset}.gif', N)
