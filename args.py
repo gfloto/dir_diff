@@ -8,6 +8,8 @@ def str2bool(x):
         return True
     elif x in ['False', 'false']:
         return False
+    elif x in ['None', 'none']:
+        return None
     else:
         raise ValueError('x must be True or False')
 
@@ -30,18 +32,19 @@ def get_args():
     parser.add_argument('--simplex_loc', type=float, default=0.9, help='value s.t. s=[simplex_loc, c, c, ...]')
 
     # categorical diffusion params
+    parser.add_argument('--q_method', type=str, default='uniform', help='noising method for categorical')
+    parser.add_argument('--sched_method', type=str, default='mutual_info', help='noise scheduler method')
+    parser.add_argument('--lmbda', type=float, default=None, help='loss factor when using truncated logistic training')
     parser.add_argument('--T', type=int, default=1000, help='time steps for discretizing time in [0,1]')
     parser.add_argument('--p_sparse', type=str, default='True', help='use sparse method to get p(x_t | x_{t-1})')
     parser.add_argument('--trunc_logistic', type=str, default='False', help='whether to use truncated logistic during training')
-    parser.add_argument('--lmbda', type=float, default=0.01, help='loss factor when using truncated logistic training')
-    parser.add_argument('--q_method', type=str, default='uniform', help='noising method for categorical')
-    parser.add_argument('--sched_method', type=str, default='mutual_info', help='noise scheduler method')
 
     args = parser.parse_args()
 
     # convert str to bool
     args.sparse_cat = str2bool(args.p_sparse)
     args.trunc_logistic = str2bool(args.trunc_logistic)
+    args.lmbda = str2bool(args.lmbda)
 
     # asserts
     assert args.exp is not None, 'must specify experiment name'

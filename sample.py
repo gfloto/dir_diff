@@ -53,14 +53,7 @@ class Sampler:
         f = self.process.sde_f(x)
         g = self.process.sde_g(x)     
 
-        # if color image: [b, k, c, h, w] -> [b, k*c, h, w]
-        if len(x.shape) == 5: # reshape to fit Unet
-            x_ = rearrange(x, 'b k c ... -> b (k c) ...')
-
-        g2_score = model(x_, t)
-
-        if len(x.shape) == 5:
-            g2_score = rearrange(g2_score, 'b (k c) ... -> b k c ...', c=3)
+        g2_score = model(x, t)
 
         # check f is not nan
         assert torch.isnan(f).sum() == 0, f'f is nan: {f}'
