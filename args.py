@@ -36,6 +36,7 @@ def get_args():
     parser.add_argument('--lmbda', type=float, default=0.01, help='loss factor when using truncated logistic training')
     parser.add_argument('--q_method', type=str, default='uniform', help='noising method for categorical')
     parser.add_argument('--q_sch', type=str, default='idk', help='whether to use truncated logistic during training')
+    parser.add_argument('--sched_method', type=str, default='linear', help='noise scheduler method')
 
     args = parser.parse_args()
 
@@ -51,6 +52,7 @@ def get_args():
     assert args.proc_type in ['cat', 'simplex'], 'process name must be cat or simplex'
     assert args.dataset in ['mnist', 'cifar10', 'text8'], 'dataset must be mnist, cifar10 or text8'
     assert args.q_method in ['uniform', 'sparse', 'absorbing', 'gaussian', 'knn'], 'cat_method must be uniform, sparse, absorbing, gaussian or knn'
+    assert args.sched_method in ['linear', 'cosine', 'mutual_info']
 
     # text8 automatically has 27 categories
     if args.dataset == 'text8':
