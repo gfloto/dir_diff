@@ -55,7 +55,6 @@ if __name__ == '__main__':
         model = Transformer(emb_dim=256, vocab_size=27).to(args.device)
         print(f'Number of parameters: {sum(p.numel() for p in model.parameters())}')
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
-    sys.exit()
 
     # load process
     if args.proc_type == 'cat':

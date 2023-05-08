@@ -49,7 +49,6 @@ def cat_train(model, process, loader, opt, args):
     model.train()
     loss_track = []
     for i, x0 in enumerate(tqdm(loader)):
-        
         # difference in dataloaders (some output class info)
         if isinstance(x0, tuple) or (isinstance(x0, list) and len(x0)==2):
             x0 = x0[0]

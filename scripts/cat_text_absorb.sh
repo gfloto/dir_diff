@@ -1,3 +1,4 @@
+cd ..
 python3 ../main.py \
     --exp cat_text_absorb \
     --proc_type cat \

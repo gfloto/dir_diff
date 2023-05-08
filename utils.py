@@ -27,6 +27,10 @@ def cat2onehot(x, k, shape):
         return rearrange(x, 'b w k -> b k w')
     elif len(shape) == 4:
         return rearrange(x, 'b w h k -> b k h w')
+    elif len(shape) == 5:
+        return rearrange(x, 'b c w h k -> b k c h w')
+    else:
+        raise ValueError("shape not supported")
 
 # useful function for returning an identity tensor
 # if input is [b, k, ...] then it returns identity over i,j with [b, i, j] (i, j and k same size) 
@@ -45,6 +49,8 @@ def identity_tensor(x):
     elif len(shape) == 5:
         b, k, c, w, h = x.shape
         return repeat(eye, 'i j -> b i j c w h', b=b, c=c, w=w, h=h).to(x.device)
+    else:
+        raise ValueError("shape not supported")
 
 # TODO: eventually move this to metrics.py or smthn
 def calculate_perplexity(model, data):

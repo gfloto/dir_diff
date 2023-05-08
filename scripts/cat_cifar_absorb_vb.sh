@@ -1,4 +1,5 @@
-python3 ../main.py \
+cd ..
+python3 main.py \
     --exp cat_cifar_absorb_mutual_vb \
     --proc_type cat \
     --dataset cifar10 \
@@ -6,5 +7,4 @@ python3 ../main.py \
     \
     --q_method absorbing \
     --sched_method mutual_info \
-    --lmbda None \
     --epochs 3000 \

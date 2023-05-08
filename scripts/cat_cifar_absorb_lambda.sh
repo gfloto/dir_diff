@@ -1,4 +1,5 @@
-python3 ../main.py \
+cd ..
+python3 main.py \
     --exp cat_cifar_absorb_mutual_lambda \
     --proc_type cat \
     --dataset cifar10 \
