@@ -1,1 +1,0 @@
-{"exp": "results/dev", "k": 12, "proc_type": "cat", "dataset": "mnist", "lr": 0.0001, "batch_size": 128, "epochs": 2500, "device": "cpu", "simplex_loc": 0.9, "T": 1000, "p_sparse": "True", "trunc_logistic": false, "lmbda": 0.01, "q_method": "uniform", "sched_method": "mutual_info", "sparse_cat": true}
