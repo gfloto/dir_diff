@@ -85,8 +85,8 @@ def cat_train(model, process, loader, opt, args):
 
         # option to do aux loss
         if args.lmbda is not None:
-            loss_aux = cross_entropy(logits, onehot2cat(x0), reduction='none').mean()
-            loss = loss_vb + args.lmda*loss_aux 
+            loss_aux = cross_entropy(logits, onehot2cat(x0, args.k), reduction='none').mean()
+            loss = loss_vb + args.lmbda*loss_aux 
         else:
             loss = loss_vb 
 
