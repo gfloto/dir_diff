@@ -17,8 +17,8 @@ def get_args():
     # add exp name
     parser.add_argument('--exp', type=str, default='dev', help='experiment name')
     parser.add_argument('--k', type=int, default=12, help='number of categories')
-    parser.add_argument('--proc_type', type=str, default='simplex', help='process type: simplex or cat')
-    parser.add_argument('--dataset', type=str, default='text8', help='dataset: mnist, cifar10 or text8')
+    parser.add_argument('--proc_type', type=str, default='cat', help='process type: simplex or cat')
+    parser.add_argument('--dataset', type=str, default='cifar10', help='dataset: mnist, cifar10 or text8')
     
     parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
     parser.add_argument('--batch_size', type=int, default=128, help='batch size')
@@ -30,13 +30,12 @@ def get_args():
     parser.add_argument('--simplex_loc', type=float, default=0.9, help='value s.t. s=[simplex_loc, c, c, ...]')
 
     # categorical diffusion params
-    parser.add_argument('--T', type=int, default=20, help='time steps for discretizing time in [0,1]')
+    parser.add_argument('--T', type=int, default=1000, help='time steps for discretizing time in [0,1]')
     parser.add_argument('--p_sparse', type=str, default='True', help='use sparse method to get p(x_t | x_{t-1})')
     parser.add_argument('--trunc_logistic', type=str, default='False', help='whether to use truncated logistic during training')
     parser.add_argument('--lmbda', type=float, default=0.01, help='loss factor when using truncated logistic training')
     parser.add_argument('--q_method', type=str, default='uniform', help='noising method for categorical')
-    parser.add_argument('--q_sch', type=str, default='idk', help='whether to use truncated logistic during training')
-    parser.add_argument('--sched_method', type=str, default='linear', help='noise scheduler method')
+    parser.add_argument('--sched_method', type=str, default='mutual_info', help='noise scheduler method')
 
     args = parser.parse_args()
 

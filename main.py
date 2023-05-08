@@ -46,12 +46,16 @@ if __name__ == '__main__':
     if args.dataset == 'mnist':
         ch = args.k if args.proc_type == 'cat' else args.k-1
         model = Unet(dim=64, channels=ch).to(args.device)
+        print(f'Number of parameters: {sum(p.numel() for p in model.parameters())}')
     elif args.dataset == 'cifar10':
         ch = 3*args.k if args.proc_type == 'cat' else 3*(args.k-1)
         model = Unet(dim=64, channels=ch).to(args.device)
+        print(f'Number of parameters: {sum(p.numel() for p in model.parameters())}')
     elif args.dataset == 'text8':
         model = Transformer(emb_dim=256, vocab_size=27).to(args.device)
+        print(f'Number of parameters: {sum(p.numel() for p in model.parameters())}')
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+    sys.exit()
 
     # load process
     if args.proc_type == 'cat':

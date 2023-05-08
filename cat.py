@@ -58,23 +58,19 @@ class CatProcess:
 
     # create betas for the diffusion process
     # based on the noise schedule method
-    def create_betas(self, T, sched_method="linear"):
-        if sched_method == "linear":
+    def create_betas(self, T, sched_method='linear'):
+        if sched_method == 'linear':
             betas = torch.linspace(1e-4, 0.02, T)
-        elif sched_method == "cosine":
+        elif sched_method == 'cosine':
             s = 0.008
-            # paper equations
-            # f_t = [np.cos((np.pi/2) + (((t/T) + s)/(1+s))) for t in range(T+1)]
-            # betas = [1 - (f_t[t+1]/f_t[t]) for t in range(T)]
-            f_t = [np.cos((np.pi/2) * (((t/T) + s)/(1+s))) for t in range(T)]
-            f_0 = np.cos((np.pi/2) *(((0/T) + s)/(1+s)))
-            betas = [f_t[t]/f_0 for t in range(T)]
+            f = lambda t, s: np.cos(np.pi/2 * (t/T + s)/(1+s))
+            betas = [1 - f(t+1, s)/f(0, s) for t in range(T)]
             betas = torch.tensor(betas)
-        elif sched_method == "mutual_info":
-            betas = [(T-t+1)**(-1) for t in range(T)]
+        elif sched_method == 'mutual_info':
+            betas = [1/(T-t+1) for t in range(T)]
             betas = torch.tensor(betas)
         else: 
-            raise ValueError("Invalid schedule method")
+            raise ValueError('Invalid schedule method')
         return betas
     
     # get t, rescale to be in proper interval
