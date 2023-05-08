@@ -62,12 +62,12 @@ class CatProcess:
         if sched_method == 'linear':
             betas = torch.linspace(1e-4, 0.02, T)
         elif sched_method == 'cosine':
-            s = 0.008
-            f = lambda t, s: np.cos(np.pi/2 * (t/T + s)/(1+s))
-            betas = [1 - f(t+1, s)/f(0, s) for t in range(T)]
+            steps = (np.arange(T + 1, dtype=np.float64) / T)
+            alpha_bar = np.cos((steps + 0.008) / 1.008 * np.pi / 2)
+            betas = np.minimum(1 - alpha_bar[1:] / alpha_bar[:-1], 0.999)
             betas = torch.tensor(betas)
         elif sched_method == 'mutual_info':
-            betas = [1/(T-t+1) for t in range(T)]
+            betas = 1. / np.linspace(T, 1., T)
             betas = torch.tensor(betas)
         else: 
             raise ValueError('Invalid schedule method')
