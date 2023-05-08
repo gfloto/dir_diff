@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 from einops import repeat, rearrange
 
-from dataloader import mnist_dataset
+from dataloader import cifar10_dataset, mnist_dataset, text8_dataset
 from model import Unet
 from process import sig, Process 
 from plot import save_vis, make_gif
@@ -15,6 +15,11 @@ from utils import save_path
 from bayes_opt import BayesianOptimization
 from bayes_opt.logger import JSONLogger
 from bayes_opt.event import Events
+from ignite.metrics import FID, InceptionScore
+from pytorch_fid.inception import InceptionV3
+import PIL.Image as Image
+import torchvision.transforms as transforms
+import torch.nn as nn
 
 '''
 score matching sampling from: https://arxiv.org/abs/2011.13456
@@ -93,7 +98,7 @@ class Sampler:
 
         # time schedule
         cdf_t = np.linspace(0,1,T+1)[::-1]
-        t = np.power(cdf_t, 1.5)
+        t = torch.tensor(np.power(cdf_t, 1.5))
         dt = cdf_t[1:] - cdf_t[:-1]
 
         # sample loop
@@ -113,6 +118,7 @@ class Sampler:
                 # normalize change to be [0, 1] to visualize 
                 change = (change - change.min()) / (change.max() - change.min())
                 save_vis([x.clone(), change], f'imgs/{int(i/d)}.png', k=self.k)
+
         if not self.fast:
             # discretize
             for i in range(int(T/d), int(T/d)+10):
@@ -123,6 +129,18 @@ class Sampler:
                 make_gif('imgs', save_path, int(T/d)+10)
 
         return x
+
+class WrapperInceptionV3(nn.Module):
+    def __init__(self, fid_incv3):
+        super().__init__()
+        self.fid_incv3 = fid_incv3
+
+    @torch.no_grad()
+    def forward(self, x):
+        y = self.fid_incv3(x)
+        y = y[0]
+        y = y[:, :, 0, 0]
+        return y
 
 def sampler_wrapper(model, T, order, g_scale_alpha, g_scale_beta, batch_size=8):
     results = []
@@ -142,31 +160,42 @@ def compute_fid(T, g_scale_alpha, g_scale_beta, order=1, batch_size=8):
     return compute_fid_score(model_results)
 
 def compute_fid_score(model_results):
-    model_results = model_results.reshape(-1, 32*32).cpu().numpy()
-    mu_model, sigma_model = np.mean(model_results, axis=0), np.cov(model_results, rowvar=False)
+    # use cpu rather than cuda to get comparable results
+    device = "cpu"
 
-    # compute fid
-    # adapted from https://github.com/mseitzer/pytorch-fid/blob/master/src/pytorch_fid/fid_score.py
-    diff = mu_true - mu_model
-    covmean, _ = scipy.linalg.sqrtm(sigma_true.dot(sigma_model), disp=False)
-    if not np.isfinite(covmean).all():
-        eps = 1e-6
-        msg = f'fid calculation produces singular product; adding {eps} to diagonal of cov estimates'
-        print(msg)
-        offset = np.eye(sigma_true.shape[0]) * eps
-        covmean = scipy.linalg.sqrtm((sigma_true + offset).dot(sigma_model + offset))
-    # numerical error might give slight imaginary component
-    if np.iscomplexobj(covmean):
-        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
-            m = np.max(np.abs(covmean.imag))
-            raise ValueError('Imaginary component {}'.format(m))
-        covmean = covmean.real
-    tr_covmean = np.trace(covmean)
-    fid = diff.dot(diff) + np.trace(sigma_true) + np.trace(sigma_model) - 2 * tr_covmean
+    # pytorch_fid model
+    dims = 2048
+    block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
+    model = InceptionV3([block_idx]).to(device)
+
+    # wrapper model to pytorch_fid model
+    wrapper_model = WrapperInceptionV3(model)
+    wrapper_model.eval()
+
+    # comparable metric
+    pytorch_fid_metric = FID(num_features=dims, feature_extractor=wrapper_model)
+
+    real_batch = interpolate(next(iter(loader))[0])
+    print(f"real_batch shape: {real_batch.shape}")
+     # Convert model_results to tensor and move to device
+    model_results = interpolate(torch.tensor(model_results).to(device))
+    
+    # Update the FID metric with the generated data
+    pytorch_fid_metric.update((model_results, real_batch))
+    
+    # Compute the FID score
+    fid = pytorch_fid_metric.compute()
 
     print(f"fid score: {fid}")
     return -fid
 
+def interpolate(batch):
+    arr = []
+    for img in batch:
+        pil_img = transforms.ToPILImage()(img)
+        resized_img = pil_img.resize((299,299), Image.BILINEAR)
+        arr.append(transforms.ToTensor()(resized_img))
+    return torch.stack(arr)
 
 import json
 import argparse
@@ -189,7 +218,6 @@ def load_sample_data(dataset):
     return mu_true, sigma_true
 
 if __name__ == '__main__':
-    batch_size = 128
     sample_args = get_sample_args()
     path = os.path.join('results', sample_args.exp)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -205,19 +233,23 @@ if __name__ == '__main__':
     elif args.dataset == 'cifar10':
         ch = 3*args.k if args.proc_type == 'cat' else 3*(args.k-1)
         model = Unet(dim=64, channels=ch).to(args.device)
-
     model_path = os.path.join('results', sample_args.exp, f'model.pt')
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval() 
     print(f'Loaded model from {model_path}')
 
-    # load dataset to compute mu_true, sigma_true for FID
-    dataset = args.dataset # should be the name of the dataset
-    mu_true, sigma_true = load_sample_data(dataset)
+    # load dataset for torch ignite metrics
+    dataset = args.dataset
+    if args.dataset == 'text8':
+        loader = text8_dataset(args.batch_size)
+    elif args.dataset == 'mnist':
+        loader = mnist_dataset(args.batch_size, args.k)
+    elif args.dataset == 'cifar10':
+        loader = cifar10_dataset(args.batch_size, args.k)
 
     # Bayesian Optimization config
     num_samples_run = 1
-    param_bounds = {'g_scale_alpha': (0.01, 4), 'g_scale_beta': (1, 4), 'T': (1000, 3000)}
+    param_bounds = {'g_scale_alpha': (0.01, 4), 'g_scale_beta': (1, 4), 'T': (1, 10)}
 
     bayes_optim = BayesianOptimization(
         f=compute_fid,
