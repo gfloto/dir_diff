@@ -102,7 +102,7 @@ class Process:
     
     # make drift term sde
     def sde_f(self, s):
-        b, k, w, h = s.shape
+        b, k = s.shape[:2]
 
         x = sig_inv(s)
         beta = -self.theta*x + 0.5*(1-2*s)

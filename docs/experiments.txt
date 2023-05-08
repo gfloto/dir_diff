@@ -1,0 +1,25 @@
+Baseline Experiments
+
+Text
+Metrics: NLL, Perplexity
+
+T: 1000
+chunk_size: 256
+sparse: True
+
+q_method: uniform, q_schedule: cosine, loss: vb
+q_method: absorbing, q_schedule: mutual info, loss: lambda=0.01
+
+
+Image
+sparse: True
+Metrics: NLL, FID, IS
+
+q_method: uniform, q_schedule: cosine, loss: vb
+q_method: absorbing, q_schedule: mutual info, loss: vb
+q_method: absorbing, q_schedule: mutual info, loss: lambda=0.01
+q_method: gauss, q_schedule: linear, loss: lambda=vb
+q_method: gauss, q_schedule: linear, loss: lambda=0.001
+
+q_method: gauss + logistic, q_schedule: mutual info, loss: lambda=0.001
+

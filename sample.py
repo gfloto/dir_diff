@@ -4,7 +4,7 @@ import scipy
 import torch
 import numpy as np
 from tqdm import tqdm
-from einops import repeat
+from einops import repeat, rearrange
 
 from dataloader import mnist_dataset
 from model import Unet
@@ -49,7 +49,10 @@ class Sampler:
     # get intial distribution at t = t_max
     def init_sample(self):
         var = 1/(2*self.theta)
-        sample = (np.sqrt(var) * torch.randn(self.batch_size, self.k-1, *self.end_shape)).to(self.device)
+        if args.dataset == 'mnist':
+            sample = (np.sqrt(var) * torch.randn(self.batch_size, self.k-1, *self.end_shape)).to(self.device)
+        elif args.dataset == 'cifar10':
+            sample = (np.sqrt(var) * torch.randn(self.batch_size, self.k-1, 3, *self.end_shape)).to(self.device)
         x = sig(sample) 
         return x
 
@@ -58,13 +61,13 @@ class Sampler:
     def update(self, model, x, t, dt, g_scale=1):
         # get f, g, g^2 score and dB
         f = self.process.sde_f(x)
-        g = self.process.sde_g(x)
+        g = self.process.sde_g(x)     
+
         g2_score = model(x, t)
 
         # check f is not nan
-        if not self.fast:
-            assert torch.isnan(f).sum() == 0, f'f is nan: {f}'
-        dB = (np.sqrt(dt) * torch.randn_like(x)).to(self.device) 
+        assert torch.isnan(f).sum() == 0, f'f is nan: {f}'
+        dB = (np.sqrt(dt) * torch.randn_like(g2_score)).to(self.device) 
 
         # solve sde: https://en.wikipedia.org/wiki/Euler%E2%80%93Maruyama_method 
         gdB = torch.einsum('b i j ..., b j ... -> b i ...', g, dB)
@@ -88,12 +91,17 @@ class Sampler:
         g_scale = np.linspace(0,1,T)[::-1]
         g_scale = g_scale_alpha*np.power(g_scale, g_scale_beta)
 
+        # time schedule
+        cdf_t = np.linspace(0,1,T+1)[::-1]
+        t = np.power(cdf_t, 1.5)
+        dt = cdf_t[1:] - cdf_t[:-1]
+
         # sample loop
+        d = 20
         for i in tqdm(range(T)):
             # update x
-            change = self.update(model, x, t, dt, g_scale=g_scale[i])
+            change = self.update(model, x, t[i], dt[i], g_scale[i])
             x = x + change
-            t -= dt / t_norm
 
             # keep in simplex 
             x = torch.clamp(x, pad, 1-pad)
@@ -181,6 +189,7 @@ def load_sample_data(dataset):
     return mu_true, sigma_true
 
 if __name__ == '__main__':
+    batch_size = 128
     sample_args = get_sample_args()
     path = os.path.join('results', sample_args.exp)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -190,7 +199,13 @@ if __name__ == '__main__':
     args = argparse.Namespace(**args)
 
     # load model
-    model = Unet(dim=64, channels=args.k-1).to(device)
+    if args.dataset == 'mnist':
+        ch = args.k if args.proc_type == 'cat' else args.k-1
+        model = Unet(dim=64, channels=ch).to(args.device)
+    elif args.dataset == 'cifar10':
+        ch = 3*args.k if args.proc_type == 'cat' else 3*(args.k-1)
+        model = Unet(dim=64, channels=ch).to(args.device)
+
     model_path = os.path.join('results', sample_args.exp, f'model.pt')
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval() 

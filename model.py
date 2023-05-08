@@ -347,6 +347,11 @@ class Unet(nn.Module):
         self.final_conv = nn.Conv2d(dim, self.out_dim, 1)
 
     def forward(self, x, time, x_self_cond = None):
+        # if color image: [b, k, c, h, w] -> [b, k*c, h, w]
+        if len(x.shape) == 5: # reshape to fit Unet
+            re = True
+            x = rearrange(x, 'b k c ... -> b (k c) ...')
+
         if self.self_condition:
             x_self_cond = default(x_self_cond, lambda: torch.zeros_like(x))
             x = torch.cat((x_self_cond, x), dim = 1)
@@ -385,6 +390,9 @@ class Unet(nn.Module):
 
         x = self.final_res_block(x, t)
         x = self.final_conv(x)
+
+        if re:
+            x = rearrange(x, 'b (k c) ... -> b k c ...', c=3)
 
         return x
 
