@@ -53,6 +53,9 @@ class Sampler:
         f = self.process.sde_f(x)
         g = self.process.sde_g(x)     
 
+        # set t to tensor, then get score
+        t = torch.tensor(t).to(self.device)
+        t = torch.rand(1).to(device)
         g2_score = model(x, t)
 
         # check f is not nan
@@ -82,9 +85,9 @@ class Sampler:
         g_scale = 1.75*np.power(g_scale, 1.5)
 
         # time schedule
-        cdf_t = np.linspace(0,1,T+1)[::-1]
-        t = np.power(cdf_t, 1.5)
-        dt = cdf_t[1:] - cdf_t[:-1]
+        t = np.linspace(0,1,T+1)[::-1]
+        t = np.power(t, 1.5)
+        dt = t[:-1] - t[1:]
 
         # sample loop
         d = 20
