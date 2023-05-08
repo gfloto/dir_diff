@@ -351,6 +351,8 @@ class Unet(nn.Module):
         if len(x.shape) == 5: # reshape to fit Unet
             re = True
             x = rearrange(x, 'b k c ... -> b (k c) ...')
+        else:
+            re = False  
 
         if self.self_condition:
             x_self_cond = default(x_self_cond, lambda: torch.zeros_like(x))

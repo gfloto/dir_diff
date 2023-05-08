@@ -8,3 +8,5 @@ python3 main.py \
     --q_method absorbing \
     --sched_method mutual_info \
     --epochs 3000 \
+    \
+    --p_sparse True \
