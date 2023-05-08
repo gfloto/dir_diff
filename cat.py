@@ -1,6 +1,7 @@
 import sys, os
 import torch
 import torch.distributions as dist
+import numpy as np
 from einops import rearrange
 
 from plot import save_vis, make_gif
@@ -42,14 +43,36 @@ class CatProcess:
         self.method = args.q_method
         self.device = args.device
 
-        self.betas = torch.linspace(1e-4, 0.02, self.T)
-        self.Q_bar = self.Q_bar(self.T).to(self.device)
-
         if args.dataset in ['mnist', 'cifar10']:
             self.data_type = 'image'
         elif args.dataset in ['text8']:
             self.data_type = 'text'
 
+        self.sched_method = args.sched_method
+        self.betas = self.create_betas(self.T, sched_method=self.sched_method)
+        self.Q_bar = self.Q_bar(self.T).to(self.device)
+
+    # create betas for the diffusion process
+    # based on the noise schedule method
+    def create_betas(self, T, sched_method="linear"):
+        if sched_method == "linear":
+            betas = torch.linspace(1e-4, 0.02, T)
+        elif sched_method == "cosine":
+            s = 0.008
+            # paper equations
+            # f_t = [np.cos((np.pi/2) + (((t/T) + s)/(1+s))) for t in range(T+1)]
+            # betas = [1 - (f_t[t+1]/f_t[t]) for t in range(T)]
+            f_t = [np.cos((np.pi/2) * (((t/T) + s)/(1+s))) for t in range(T)]
+            f_0 = np.cos((np.pi/2) *(((0/T) + s)/(1+s)))
+            betas = [f_t[t]/f_0 for t in range(T)]
+            betas = torch.tensor(betas)
+        elif sched_method == "mutual_info":
+            betas = [(T-t+1)**(-1) for t in range(T)]
+            betas = torch.tensor(betas)
+        else: 
+            raise ValueError("Invalid schedule method")
+        return betas
+    
     # get t, rescale to be in proper interval
     def t(self):
         t = torch.randint(self.T, (1,))

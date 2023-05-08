@@ -32,7 +32,7 @@ if __name__ == '__main__':
     if args.proc_type == 'simplex':
         print(f'theta: {args.theta:.4f}, O: {args.O}, t-min: {args.t_min:.4f}, t-max: {args.t_max:.4f}')
     elif args.proc_type == 'cat':
-        print(f'q method: {args.q_method}, k: {args.k}, T: {args.T}, sparse: {args.p_sparse}, trunc: {args.trunc_logistic}')
+        print(f'q method: {args.q_method}, k: {args.k}, T: {args.T}, sparse: {args.p_sparse}, trunc: {args.trunc_logistic}, sched_method: {args.sched_method}')
 
     # load dataset
     if args.dataset == 'text8':
