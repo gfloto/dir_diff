@@ -2,8 +2,12 @@ import sys, os
 import torch
 import math
 import numpy as np
-from einops import rearrange
+from einops import repeat, rearrange
 from torch.nn.functional import one_hot
+
+# useful torch -> numpy
+def ptnp(x):
+    return x.detach().cpu().numpy()
 
 # append path to experiment folder
 def save_path(args, path):
@@ -14,13 +18,33 @@ def onehot2cat(x, k):
     return torch.argmax(x, dim=1)
 
 # [b, ...] to one-hot [b, k, ...]
-def cat2onehot(x, k):
+def cat2onehot(x, k, shape):
+    # shape is [b, ..., k]
     x = one_hot(x, k).float() 
-    return rearrange(x, 'b h w k -> b k h w')
 
-# useful torch -> numpy
-def ptnp(x):
-    return x.detach().cpu().numpy()
+    # TODO: there should be a better way to write this...
+    if len(shape) == 3:
+        return rearrange(x, 'b w k -> b k w')
+    elif len(shape) == 4:
+        return rearrange(x, 'b w h k -> b k h w')
+
+# useful function for returning an identity tensor
+# if input is [b, k, ...] then it returns identity over i,j with [b, i, j] (i, j and k same size) 
+def identity_tensor(x):
+    # shape is [b, k, ...]
+    shape = x.shape
+    eye = torch.eye(x.shape[1])
+
+    # this is ugly and bad!
+    if len(shape) == 3:
+        b, k, w = x.shape
+        return repeat(eye, 'i j -> b i j w', b=b, w=w).to(x.device)
+    elif len(shape) == 4:
+        b, k, w, h = x.shape
+        return repeat(eye, 'i j -> b i j w h', b=b, w=w, h=h).to(x.device)
+    elif len(shape) == 5:
+        b, k, c, w, h = x.shape
+        return repeat(eye, 'i j -> b i j c w h', b=b, c=c, w=w, h=h).to(x.device)
 
 # TODO: eventually move this to metrics.py or smthn
 def calculate_perplexity(model, data):
