@@ -101,9 +101,10 @@ class CatProcess:
             Qt = (1 - beta_t) * torch.eye(self.k)
             Qt[:, m] += beta_t
 
-        elif self.method == 'gaussian':
+        elif self.method == 'gauss':
             beta_t = self.betas[t]
             Qt = torch.zeros(self.k, self.k)
+            # TODO: remove warning from here...
             beta_t = torch.tensor(beta_t)
             normalization = torch.sum(torch.exp(-4 * (torch.arange(-(self.k - 1), self.k) ** 2) / ((self.k - 1) ** 2 * beta_t)))
             i, j = torch.meshgrid(torch.arange(self.k), torch.arange(self.k))
@@ -112,6 +113,8 @@ class CatProcess:
             Qt[range(self.k), range(self.k)] = 1 - Qt.sum(dim=1)
 
         elif self.method == 'knn':
+            raise NotImplementedError('knn method not implemented yet')
+
             # Compute the pairwise distances between all words in the embedding space
             distances = torch.cdist(embeddings, embeddings)
 
