@@ -6,7 +6,7 @@ from torch.nn.functional import softmax
 
 from utils import ptnp, onehot2cat
 
-def train(model, process, loader, opt, args, track_tu = False):
+def train(model, process, loader, opt, args):
     device = args.device; k = args.k
     model.train()
     loss_track, tu_track = [], []
@@ -36,14 +36,9 @@ def train(model, process, loader, opt, args, track_tu = False):
 
         # save loss
         loss_track.append(ptnp(loss))
+        tu_track.append(ptnp(tu))
 
-        if track_tu: 
-            tu_track.append(ptnp(tu))
-
-    if track_tu: 
-        return np.mean(loss_track), (tu_track, loss_track)
-    
-    return np.mean(loss_track)
+    return loss_track, tu_track
 
 
 from cat_utils import get_logits_from_logistic_pars

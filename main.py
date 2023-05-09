@@ -10,7 +10,8 @@ from train import train, cat_train
 from dataloader import text8_dataset, mnist_dataset, cifar10_dataset
 from cat import CatProcess
 from process import Process
-from utils import save_path
+from utils import save_path, sample_dist
+from plot import hist_plot
 
 # sample arguments as json
 def save_args(args):
@@ -68,32 +69,22 @@ if __name__ == '__main__':
         process = CatProcess(args)
     elif args.proc_type == 'simplex':
         process = Process(args)
-
-    # extra debug tracking 
-    track_tu = args.track_tu
+        s_dist = None
 
     # train loop
     loss_track, tu_track, batch_losses = [], [], []
     for epoch in range(args.epochs):
         if args.proc_type == 'simplex':
-            epoch_return = train(model, process, loader, opt, args, track_tu)
-        elif args.proc_type == 'cat':
-            epoch_return = cat_train(model, process, loader, opt, args, track_tu)
+            loss_out, tu_out = train(model, process, loader, opt, args)
+            loss = np.mean(loss_out)
 
-        if track_tu:
-            loss, epoch_tracking = epoch_return
-            epoch_tu, epoch_losses = epoch_tracking
-            tu_track.extend(epoch_tu)
-            batch_losses.extend(epoch_losses)
-            # create histogram of tu (x axis) versus loss (y axis)
-            tu_np, batch_loss_np = np.array(tu_track).reshape(-1, ), np.array(batch_losses).reshape(-1,)
-            plt.hist2d(tu_np, batch_loss_np, bins=100, cmap='viridis')
-            plt.xlabel('tu (batches)')
-            plt.ylabel('loss (batches)')
-            plt.savefig(save_path(args, f'tu_loss.png'))
-            plt.close()
-        else:
-            loss = epoch_return
+            # plot histogram of tu, get dist. for sample
+            hist_plot(tu_out, loss_out, save_path(args, f'hist.png'))
+            s_dist = sample_dist(tu_out, loss_out)
+            process.s_dist = s_dist # set time sampling distribution
+
+        elif args.proc_type == 'cat':
+            loss = cat_train(model, process, loader, opt, args)
 
         # keep track of loss for training curve
         loss_track.append(loss)

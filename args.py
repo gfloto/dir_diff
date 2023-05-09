@@ -25,10 +25,6 @@ def get_args():
     parser.add_argument('--epochs', type=int, default=2500, help='number of epochs')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
 
-    # extra debug args
-    parser.add_argument('--track_tu', type=str, default='False', help='track and plot tu')
-
-
     # simplex diffusion params
     parser.add_argument('--simplex_loc', type=float, default=0.9, help='value s.t. s=[simplex_loc, c, c, ...]')
 
@@ -46,7 +42,6 @@ def get_args():
     # convert str to bool
     args.sparse_cat = str2bool(args.p_sparse)
     args.trunc_logistic = str2bool(args.trunc_logistic)
-    args.track_tu = str2bool(args.track_tu)
 
     # asserts
     assert args.exp is not None, 'must specify experiment name'

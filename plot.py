@@ -75,7 +75,15 @@ def plot_loss(loss, path):
     plt.plot(loss)
     plt.yscale('log')
     plt.savefig(os.path.join(path, 'loss.png'))
-    plt.clf()
+    plt.close()
+
+# hist plot for tracking loss vs time
+def hist_plot(x, y, path):
+    plt.scatter(x, y)
+    plt.xlabel('time')
+    plt.ylabel('loss')
+    plt.savefig(path)
+    plt.close()
 
 # plot 2d or 3d scatter plot of distributions
 def scatter_plot(x, i, path):

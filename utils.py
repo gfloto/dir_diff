@@ -68,3 +68,44 @@ def calculate_perplexity(model, data):
         num_words += len(sentence)
     perplexity = math.exp(total_log_prob / num_words)
     return perplexity
+
+# from t and loss data, get distribution to sample from
+def sample_dist(t, loss, bins=50):
+    total = np.zeros(bins)    
+    count = np.zeros(bins)
+
+    # get count for each bin
+    assert len(t) == len(loss)
+    for i in range(len(t)):
+        bin_id = int(t[i] * bins)
+        total[bin_id] += loss[i]
+        count[bin_id] += 1
+
+    # get average loss for each bin
+    avg = np.zeros(bins)
+    for i in range(bins):
+        if count[i] > 0:
+            avg[i] = total[i] / count[i]
+        else:
+            avg[i] = 0 
+
+    # set 0 to min, then normalize
+    avg = np.array(avg)
+    avg[avg == 0] = np.min(avg[avg != 0])
+    avg /= np.sum(avg)
+    return avg
+
+import matplotlib.pyplot as plt
+if __name__ == '__main__':
+    x = np.random.rand(400)
+    y = np.exp(x)
+
+    dist = sample_dist(x, y)
+    out = np.random.choice(np.arange(dist.shape[0]), p=dist)
+    print(out)
+    sys.exit()
+
+    # plot bar
+    x_ = np.arange(len(dist)) / len(dist)
+    plt.scatter(x_, dist)
+    plt.show()
