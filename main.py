@@ -69,14 +69,32 @@ if __name__ == '__main__':
     elif args.proc_type == 'simplex':
         process = Process(args)
 
+    # extra debug tracking 
+    track_tu = args.track_tu
+
     # train loop
-    loss_track = []
+    loss_track, tu_track, batch_losses = [], [], []
     for epoch in range(args.epochs):
         if args.proc_type == 'simplex':
-            loss = train(model, process, loader, opt, args)
+            epoch_return = train(model, process, loader, opt, args, track_tu)
         elif args.proc_type == 'cat':
-            loss = cat_train(model, process, loader, opt, args)
-    
+            epoch_return = cat_train(model, process, loader, opt, args, track_tu)
+
+        if track_tu:
+            loss, epoch_tracking = epoch_return
+            epoch_tu, epoch_losses = epoch_tracking
+            tu_track.extend(epoch_tu)
+            batch_losses.extend(epoch_losses)
+            # create histogram of tu (x axis) versus loss (y axis)
+            tu_np, batch_loss_np = np.array(tu_track).reshape(-1, ), np.array(batch_losses).reshape(-1,)
+            plt.hist2d(tu_np, batch_loss_np, bins=100, cmap='viridis')
+            plt.xlabel('tu (batches)')
+            plt.ylabel('loss (batches)')
+            plt.savefig(save_path(args, f'tu_loss.png'))
+            plt.close()
+        else:
+            loss = epoch_return
+
         # keep track of loss for training curve
         loss_track.append(loss)
         print(f'epoch: {epoch}, loss: {loss}')
