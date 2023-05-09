@@ -149,41 +149,26 @@ class WrapperInceptionV3(nn.Module):
         return y
 
 def sampler_wrapper(model, T, order, g_scale_alpha, g_scale_beta, batch_size=8):
-    results = []
     batch_size, T = int(batch_size), int(T)
     order = 1 if order < 1.5 else 2
-    for i in range(num_samples_run):
-        # sample from model
-        sampler = Sampler(args, batch_size=args.batch_size, device=device, fast=True)
-        result = sampler(model, T=T, g_scale_beta=g_scale_beta, g_scale_alpha=g_scale_alpha, save_path=save_path(args, 'sample.gif'))
-        results.append(result)
-    return results
+    # sample from model
+    sampler = Sampler(args, batch_size=args.batch_size, device=device, fast=True)
+    result = sampler(model, T=T, g_scale_beta=g_scale_beta, g_scale_alpha=g_scale_alpha, save_path=save_path(args, 'sample.gif'))
+    return result
 
 def compute_fid(T, g_scale_alpha, g_scale_beta, order=1, batch_size=8):
     print(f'Computing FID for T={T}, order={order}, g_scale_alpha={g_scale_alpha}, g_scale_beta={g_scale_beta}, batch_size={batch_size}')
     model_results = sampler_wrapper(model, T, order, g_scale_alpha=g_scale_alpha, g_scale_beta=g_scale_beta, batch_size=batch_size)
-    model_results = torch.cat(model_results, dim=0)
     return compute_fid_score(model_results)
 
 def compute_fid_score(model_results):
-    # use cpu rather than cuda to get comparable results
-    device = "cpu"
-
-    # pytorch_fid model
-    dims = 2048
-    block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
-    model = InceptionV3([block_idx]).to(device)
-
-    # wrapper model to pytorch_fid model
-    wrapper_model = WrapperInceptionV3(model)
-    wrapper_model.eval()
-
     # comparable metric
     pytorch_fid_metric = FID(num_features=dims, feature_extractor=wrapper_model)
 
-    real_batch = interpolate(next(iter(loader))[0])
+    loader_batch = next(iter(loader))
+    real_batch = interpolate(loader_batch[0].to(fid_device))
      # Convert model_results to tensor and move to device
-    model_results = interpolate(torch.tensor(model_results).to(device))
+    model_results = interpolate(torch.tensor(model_results).to(fid_device))
     
     # Update the FID metric with the generated data
     pytorch_fid_metric.update((model_results, real_batch))
@@ -248,13 +233,25 @@ if __name__ == '__main__':
     if args.dataset == 'text8':
         loader = text8_dataset(args.batch_size)
     elif args.dataset == 'mnist':
-        loader = mnist_dataset(args.batch_size, args.k)
+        loader = mnist_dataset(args.batch_size, args.k, create_onehot=False)
     elif args.dataset == 'cifar10':
-        loader = cifar10_dataset(args.batch_size, args.k)
+        loader = cifar10_dataset(args.batch_size, args.k, create_onehot=False)
 
     # Bayesian Optimization config
     num_samples_run = 1
     param_bounds = {'g_scale_alpha': (0.01, 4), 'g_scale_beta': (1, 4), 'T': (1, 2)}
+
+    # use cpu rather than cuda to get comparable results
+    fid_device = "cpu"
+
+    # pytorch_fid model
+    dims = 2048
+    block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
+    inception_model = InceptionV3([block_idx]).to(fid_device)
+
+    # wrapper model to pytorch_fid model
+    wrapper_model = WrapperInceptionV3(inception_model)
+    wrapper_model.eval()
 
     bayes_optim = BayesianOptimization(
         f=compute_fid,

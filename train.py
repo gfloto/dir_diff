@@ -46,7 +46,6 @@ from cat_utils import kld_logits, cat_log_nll, vb_loss
 
 def cat_train(model, process, loader, opt, args):
     device = args.device; k = args.k
-
     model.train()
     loss_track = []
     for i, x0 in enumerate(tqdm(loader)):

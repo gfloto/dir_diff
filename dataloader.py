@@ -48,10 +48,12 @@ def mnist_dataset(batch_size, k, root='data/', num_workers=4, size=32):
     return mnist_loader
 
 # return cifar 10 dataset
-def cifar10_dataset(batch_size, k, root='data/', num_workers=4, size=32):
+def cifar10_dataset(batch_size, k, root='data/', num_workers=4, size=32, create_onehot=True):
     transform = transforms.Compose([
         transforms.ToTensor(),
         OnehotRGB(k)
+    ]) if create_onehot else transforms.Compose([
+        transforms.ToTensor(),
     ])
     cifar10_set = torchvision.datasets.CIFAR10(
         root=root, train=True, download=True, transform=transform)
