@@ -1,25 +1,26 @@
 import sys
 import torch
 
-from torch.nn.functional import softmax, log_softmax
+from torch.nn.functional import softmax, log_softmax, cross_entropy, kl_div
 
 # numerically stable kld for logits
-def kld_logits(true_logits, model_logits, eps=1e-6):
-    sm = softmax(true_logits + eps, dim=1)
-    kld = sm * (log_softmax(true_logits + eps, dim=1) - log_softmax(model_logits + eps, dim=1))
-    return kld 
+def kld_logits(target_logits, model_logits, eps=1e-6):
+    model_norm = log_softmax(model_logits + eps, dim=1)
+    kld = kl_div(model_norm, target_logits, reduction='mean', log_target=True)
+    return kld.mean() 
 
 # likelihood for first step of diffusion process
-def cat_log_likelihood(x0, model_logits):
-    log_probs = log_softmax(model_logits, dim=1)
-    cat_ll = torch.sum(x0 * log_probs, dim=1)
-    return cat_ll
+def cat_log_nll(x0, model_logits):
+    x0 = x0.argmax(dim=1)
+    ce = cross_entropy(model_logits, x0, reduction='mean')
+    return ce
 
-# cross entropy for first step of diffusion process
-def cat_cross_entropy(x0, model_logits):
-    log_probs = log_softmax(model_logits, dim=1)
-    cat_ce = torch.sum(-x0 * log_probs, dim=1)
-    return cat_ce
+# variational bound loss for discrete diffusion
+def vb_loss(x0, t, target_logits, model_logits):
+    if t > 0:
+        return kld_logits(target_logits, model_logits)
+    else:
+        return cat_log_nll(x0, model_logits)
 
 def normalize(int_vctr, num_classes):
     return 2*(int_vctr/num_classes) - 1

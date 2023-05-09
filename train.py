@@ -42,6 +42,7 @@ def train(model, process, loader, opt, args):
 
 
 from cat_utils import get_logits_from_logistic_pars
+from cat_utils import kld_logits, cat_log_nll, vb_loss
 
 def cat_train(model, process, loader, opt, args):
     device = args.device; k = args.k
@@ -49,8 +50,7 @@ def cat_train(model, process, loader, opt, args):
     model.train()
     loss_track = []
     for i, x0 in enumerate(tqdm(loader)):
-        if i > 10: return np.mean(loss_track)
-
+        if i > 10: break
         # difference in dataloaders (some output class info)
         if isinstance(x0, tuple) or (isinstance(x0, list) and len(x0)==2):
             x0 = x0[0]
@@ -67,33 +67,26 @@ def cat_train(model, process, loader, opt, args):
         if args.trunc_logistic:
             raise NotImplementedError
 
-            # throw not implimented error
-            loc, log_scale = pred
-            logits = get_logits_from_logistic_pars(loc, log_scale, args.k)
-        else:
-            logits = log_softmax(pred, dim=1)
-
         # option to output p(x0 | xt) and get p(x_t | xt) from that
-        if args.sparse_cat:
-            logits = process.Q_rev(logits, xt, t)
-            # normalize s.t. logits.exp().sum(1) = 1
-            logits = logits - logits.logsumexp(1, keepdim=True)
+        if args.sparse_cat and t > 0:
+            model_x0_logits = pred
+            model_logits = process.Q_rev(model_x0_logits, xt, t)
+        else:
+            model_logits = pred
 
         # q(x_t-1 | xt, x0)
         q_rev = process.Q_rev(x0, xt, t)
 
-        # variational bound loss for discrete diffusion
-        loss_vb = kl_div(logits, q_rev, reduction='none').mean()
-
         # option to do aux loss
         if args.lmbda is not None:
-            loss_aux = cross_entropy(logits, onehot2cat(x0, args.k), reduction='none').mean()
+            loss_vb = vb_loss(x0, t, q_rev, model_logits)
+            loss_aux = cat_log_nll(x0, model_x0_logits)
             loss = loss_vb + args.lmbda*loss_aux 
+            sys.exit()
         else:
-            loss = loss_vb 
+            loss = cat_log_nll(x0, model_x0_logits)
 
         # backward pass
-        loss = loss.mean() 
         opt.zero_grad()
         loss.backward()
         opt.step()
