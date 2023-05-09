@@ -24,7 +24,7 @@ def get_args():
     parser.add_argument('--batch_size', type=int, default=128, help='batch size')
     parser.add_argument('--epochs', type=int, default=2500, help='number of epochs')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
-
+    parser.add_argument('--amp', type=bool, default=False, help='use automatic mixed precision')
 
     # simplex diffusion params
     parser.add_argument('--simplex_loc', type=float, default=0.9, help='value s.t. s=[simplex_loc, c, c, ...]')

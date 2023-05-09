@@ -6,12 +6,16 @@ from torch.nn.functional import log_softmax, cross_entropy, kl_div
 from einops import rearrange
 
 from utils import ptnp, onehot2cat
+from torch.cuda.amp import GradScaler
+from torch import autocast
 
 def train(model, process, loader, opt, args):
     device = args.device; k = args.k
     model.train()
+    scaler = GradScaler()
     loss_track = []
     for i, x0 in enumerate(tqdm(loader)):
+        opt.zero_grad()
         # difference in dataloaders (some output class info)
         if isinstance(x0, tuple) or isinstance(x0, list):
             x0 = x0[0] 
@@ -25,15 +29,13 @@ def train(model, process, loader, opt, args):
         g2_score = process.g2_score(xt, mu, var)
 
         # predict g^2 score
-        score_out = model(xt, tu)
-
-        # loss
-        loss = (score_out - g2_score).pow(2).mean()
-
-        # backward pass
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
+        with autocast(device_type='cuda', dtype=torch.bfloat16, enabled=args.amp):
+            score_out = model(xt, tu)
+            # loss
+            loss = (score_out - g2_score).pow(2).mean()
+        scaler.scale(loss).backward()
+        scaler.step(opt)
+        scaler.update()
 
         # save loss
         loss_track.append(ptnp(loss))
