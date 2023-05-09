@@ -149,11 +149,11 @@ class CatProcess:
         return Qt_bar
 
     # fill in later
-    def Q_rev(self, x0, xt, t):
+    def Q_rev_logits(self, x0, xt, t, eps=1e-6):
         num =  mm(self.Q(t).T, xt) * mm(self.Q_bar[t-1], x0)
         denom = torch.einsum('bk..., bk... -> b...', xt, mm(self.Q_bar[t], x0))
         denom = torch.stack(self.k*[denom], dim=1)
-        out = num / denom
+        out = (num + eps).log() - (denom + eps).log()
 
         return out 
 

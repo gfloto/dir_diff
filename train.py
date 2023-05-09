@@ -79,14 +79,14 @@ def cat_train(model, process, loader, opt, args):
 
         # option to do aux loss
         if args.lmbda is not None:
-            loss_vb = vb_loss(x0, t, q_rev, model_logits).mean()
-            loss_aux = cat_log_nll(x0, model_x0_logits).mean()  
+            loss_vb = vb_loss(x0, t, q_rev, model_logits)
+            loss_aux = cat_log_nll(x0, model_x0_logits)
             loss = loss_vb + args.lmbda*loss_aux 
+            sys.exit()
         else:
-            loss = cat_log_nll(x0, model_x0_logits).mean()
+            loss = cat_log_nll(x0, model_x0_logits)
 
         # backward pass
-        loss = loss.mean() 
         opt.zero_grad()
         loss.backward()
         opt.step()
