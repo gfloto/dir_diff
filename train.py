@@ -2,8 +2,7 @@ import sys, os
 from tqdm import tqdm
 import torch
 import numpy as np
-from torch.nn.functional import log_softmax, cross_entropy, kl_div
-from einops import rearrange
+from torch.nn.functional import softmax 
 
 from utils import ptnp, onehot2cat
 
@@ -45,7 +44,9 @@ from cat_utils import get_logits_from_logistic_pars
 from cat_utils import kld_logits, cat_log_nll, vb_loss
 
 def cat_train(model, process, loader, opt, args):
-    device = args.device; k = args.k
+    # option to output params of truncated logistic distribution
+    if args.trunc_logistic or not args.sparse_cat:
+        raise NotImplementedError
 
     model.train()
     loss_track = []
@@ -56,35 +57,27 @@ def cat_train(model, process, loader, opt, args):
             x0 = x0[0]
         x0 = x0.to(args.device)
 
-        # get t, x0 xt
+        # get t, x0, xt, q(x_t-1 | xt, x0)
         t, tu = process.t()
         xt = process.xt(x0, t) 
+        q_rev_logits = process.Q_rev_logits(x0, xt, t)
 
         # get model output
-        pred = model(xt, tu)
+        model_x0_logits = model(xt, tu)
 
-        # option to output params of truncated logistic distribution
-        if args.trunc_logistic:
-            raise NotImplementedError
-
-        # option to output p(x0 | xt) and get p(x_t | xt) from that
-        if args.sparse_cat and t > 0:
-            model_x0_logits = pred
-            model_logits = process.Q_rev(model_x0_logits, xt, t)
+        # output p(x0 | xt) and get p(x_t | xt) from that
+        if t > 0:
+            model_logits = process.Q_rev_logits(softmax(model_x0_logits, dim=1), xt, t)
         else:
-            model_logits = pred
+            model_logits = model_x0_logits
 
-        # q(x_t-1 | xt, x0)
-        q_rev = process.Q_rev(x0, xt, t)
-
-        # option to do aux loss
+        # losses
+        loss_vb = vb_loss(x0, t, q_rev_logits, model_logits)
         if args.lmbda is not None:
-            loss_vb = vb_loss(x0, t, q_rev, model_logits)
             loss_aux = cat_log_nll(x0, model_x0_logits)
             loss = loss_vb + args.lmbda*loss_aux 
-            sys.exit()
         else:
-            loss = cat_log_nll(x0, model_x0_logits)
+            loss = vb_loss(x0, t, q_rev_logits, model_logits)
 
         # backward pass
         opt.zero_grad()

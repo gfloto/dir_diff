@@ -1,9 +1,9 @@
 cd ..
 python3 main.py \
-    --exp simplex_text \
+    --exp simplex_cifar \
     --proc_type simplex \
-    --dataset text8 \
+    --dataset cifar10 \
     \
     --simplex_loc 0.9 \
-    --epochs 350 \
+    --epochs 3000 \
     --k 27 \
