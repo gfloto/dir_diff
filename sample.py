@@ -90,23 +90,21 @@ class Sampler:
 
         # select times for nn (always 0-1)
         t = torch.tensor([1.]).to(self.device)
+        # dt for sde solver
+        t_norm = args.t_max - args.t_min
+        dt = t_norm * 1/T
 
         # noise schedule
         g_scale = np.linspace(0,1,T)[::-1]
         g_scale = g_scale_alpha*np.power(g_scale, g_scale_beta)
 
-        # time schedule
-        t = np.linspace(0,1,T+1)[::-1]
-        t = np.power(t, 1.5)
-        dt = t[:-1] - t[1:]
-        t = t[:-1]
-
         # sample loop
         d = 20
         for i in tqdm(range(T)):
             # update x
-            change = self.update(model, x, t[i], dt[i], g_scale[i])
+            change = self.update(model, x, t, dt, g_scale[i])
             x = x + change
+            t -= dt / t_norm
 
             # keep in simplex 
             x = torch.clamp(x, pad, 1-pad)
