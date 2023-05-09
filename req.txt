@@ -13,3 +13,6 @@ streamlit
 einops
 more-itertools
 transformers
+bayesian-optimization
+pytorch-ignite
+pytorch-fid

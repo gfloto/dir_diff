@@ -254,7 +254,7 @@ if __name__ == '__main__':
 
     # Bayesian Optimization config
     num_samples_run = 1
-    param_bounds = {'g_scale_alpha': (0.01, 4), 'g_scale_beta': (1, 4), 'T': (1, 10)}
+    param_bounds = {'g_scale_alpha': (0.01, 4), 'g_scale_beta': (1, 4), 'T': (1, 2)}
 
     bayes_optim = BayesianOptimization(
         f=compute_fid,
