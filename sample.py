@@ -143,7 +143,7 @@ class WrapperInceptionV3(nn.Module):
         y = y[:, :, 0, 0]
         return y
 
-def sampler_wrapper(model, T, order, g_scale_alpha, g_scale_beta, batch_size=8):
+def sampler_wrapper(model, T, order, g_scale_alpha, g_scale_beta):
     batch_size, T = int(batch_size), int(T)
     order = 1 if order < 1.5 else 2
     # sample from model
@@ -151,9 +151,9 @@ def sampler_wrapper(model, T, order, g_scale_alpha, g_scale_beta, batch_size=8):
     result = sampler(model, T=T, g_scale_beta=g_scale_beta, g_scale_alpha=g_scale_alpha, save_path=save_path(args, 'sample.gif'))
     return result
 
-def compute_fid(T, g_scale_alpha, g_scale_beta, order=1, batch_size=8):
-    print(f'Computing FID for T={T}, order={order}, g_scale_alpha={g_scale_alpha}, g_scale_beta={g_scale_beta}, batch_size={batch_size}')
-    model_results = sampler_wrapper(model, T, order, g_scale_alpha=g_scale_alpha, g_scale_beta=g_scale_beta, batch_size=batch_size)
+def compute_fid(T, g_scale_alpha, g_scale_beta, order=1):
+    print(f'Computing FID for T={T}, order={order}, g_scale_alpha={g_scale_alpha}, g_scale_beta={g_scale_beta}, batch_size={args.batch_size}')
+    model_results = sampler_wrapper(model, T, order, g_scale_alpha=g_scale_alpha, g_scale_beta=g_scale_beta)
     return compute_fid_score(model_results)
 
 def compute_fid_score(model_results):
@@ -234,7 +234,7 @@ if __name__ == '__main__':
 
     # Bayesian Optimization config
     num_samples_run = 1
-    param_bounds = {'g_scale_alpha': (0.01, 4), 'g_scale_beta': (1, 4), 'T': (1, 2)}
+    param_bounds = {'g_scale_alpha': (0.01, 4), 'g_scale_beta': (1, 4), 'T': (1000, 3000)}
 
     # use cpu rather than cuda to get comparable results
     fid_device = "cpu"
