@@ -5,8 +5,9 @@ from torch.nn.functional import softmax, log_softmax, cross_entropy, kl_div
 
 # numerically stable kld for logits
 def kld_logits(target_logits, model_logits, eps=1e-6):
+    target_norm = log_softmax(target_logits + eps, dim=1)
     model_norm = log_softmax(model_logits + eps, dim=1)
-    kld = kl_div(model_norm, target_logits, reduction='mean', log_target=True)
+    kld = kl_div(model_norm, target_norm, reduction='mean', log_target=True)
     return kld.mean() 
 
 # likelihood for first step of diffusion process

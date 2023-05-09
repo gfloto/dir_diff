@@ -6,29 +6,21 @@ from einops import rearrange
 
 from utils import cat2onehot
 
+# input [b, ..., k], normalize where sum k could be 0
+def normalize(x, dim=-1, eps=1e-6):
+    x += eps
+    return x / (torch.sum(x, dim=dim, keepdim=True))
+
 # useful sampling function
 def sample(q, k):
     q = rearrange(q, 'b k ... -> b ... k')
+    q = normalize(q)
     out = dist.Categorical(q).sample()
     return cat2onehot(out, k=k, shape=q.shape)
 
 # shortname for using einsum
 def mm(q, x):
     return torch.einsum('ik, bk... -> bi...', q, x)
-
-# TODO: where are the embeddings coming from?
-def compute_knn_adjacency_matrix(embeddings, k):
-    # Compute the k-nearest neighbors of each word in the embedding space
-    nbrs = NearestNeighbors(n_neighbors=k, algorithm='ball_tree').fit(embeddings)
-    distances, indices = nbrs.kneighbors(embeddings)
-
-    # Construct the k-nearest neighbor adjacency matrix
-    n_words = embeddings.shape[0]
-    G = np.zeros((n_words, n_words))
-    for i in range(n_words):
-        G[i, indices[i]] = 1
-
-    return G
 
 '''
 process for default categorical diffusion
@@ -112,31 +104,6 @@ class CatProcess:
             Qt[range(self.k), range(self.k)] = 0
             Qt[range(self.k), range(self.k)] = 1 - Qt.sum(dim=1)
 
-        elif self.method == 'knn':
-            raise NotImplementedError('knn method not implemented yet')
-
-            # Compute the pairwise distances between all words in the embedding space
-            distances = torch.cdist(embeddings, embeddings)
-
-            # Find the k-nearest neighbors of each word
-            # Exclude the first nearest neighbor, which is the word itself
-            knn = distances.topk(k=k+1, dim=1, largest=False).indices[:, 1:]
-
-            # Construct the k-nearest neighbor adjacency matrix
-            n_words = embeddings.shape[0]
-            G = torch.zeros((n_words, n_words))
-            G.scatter_(1, knn, 1)
-
-            # Symmetrize the adjacency matrix
-            A = (G + G.T) / (2 * k)
-
-            # Construct the rate matrix R by modifying A directly
-            A[range(n_words), range(n_words)] = -A.sum(dim=1)
-
-            # Compute the transition matrix using a matrix exponential
-            alpha_t = alphas[t]
-            Qt = torch.matrix_exp(alpha_t * A) 
-
         return Qt.to(self.device)
 
     # Q_bar is q(x_t | x_0) (which is just Q_1 @ Q_2 @ ...)
@@ -153,8 +120,9 @@ class CatProcess:
         num =  mm(self.Q(t).T, xt) * mm(self.Q_bar[t-1], x0)
         denom = torch.einsum('bk..., bk... -> b...', xt, mm(self.Q_bar[t], x0))
         denom = torch.stack(self.k*[denom], dim=1)
-        out = (num + eps).log() - (denom + eps).log()
 
+        # assert num and denom are positive everywhere
+        out = (num + eps).log() - (denom + eps).log()
         return out 
 
     # one-hot text to string
