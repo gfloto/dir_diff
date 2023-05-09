@@ -73,6 +73,14 @@ def calculate_perplexity(model, data):
 def sample_dist(t, loss, bins=50):
     total = np.zeros(bins)    
     count = np.zeros(bins)
+    loss = np.exp(loss)
+
+    # remove outliers above 3 std
+    loss = loss**2
+    t = np.array(t)
+    inds = np.where(loss < np.mean(loss) + 3*np.std(loss))[0]
+    t = t[inds]
+    loss = loss[inds]
 
     # get count for each bin
     assert len(t) == len(loss)

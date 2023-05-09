@@ -79,7 +79,17 @@ def plot_loss(loss, path):
 
 # hist plot for tracking loss vs time
 def hist_plot(x, y, path):
+    y /= np.mean(y)
     plt.scatter(x, y)
+
+    # remove outliers above 3 std
+    y = np.exp(y)
+    x = np.array(x)
+    inds = np.where(y < np.mean(y) + 3*np.std(y))[0]
+    y = y[inds]
+    x = x[inds]
+
+    plt.scatter(x, y / np.mean(y))
     plt.xlabel('time')
     plt.ylabel('loss')
     plt.savefig(path)
