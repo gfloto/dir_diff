@@ -8,3 +8,5 @@ python3 main.py \
     --q_method uniform \
     --sched_method cosine \
     --epochs 3000 \
+    \
+    --p_sparse True \

@@ -1,7 +1,7 @@
 import sys, os
-import torch
 import json
-import argparse
+import torch
+import numpy as np
 import matplotlib.pyplot as plt
 
 from args import get_args
@@ -10,7 +10,8 @@ from train import train, cat_train
 from dataloader import text8_dataset, mnist_dataset, cifar10_dataset
 from cat import CatProcess
 from process import Process
-from utils import save_path
+from utils import save_path, sample_dist
+from plot import hist_plot
 
 # sample arguments as json
 def save_args(args):
@@ -56,30 +57,46 @@ if __name__ == '__main__':
         print(f'Number of parameters: {sum(p.numel() for p in model.parameters())}')
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
+    # check for pretrained model
+    model_path = save_path(args, f'model.pt')
+    if os.path.exists(model_path):
+        # TODO: load optimizer and loss
+        print('loading pretrained model')
+        model.load_state_dict(torch.load(model_path))
+
     # load process
     if args.proc_type == 'cat':
         process = CatProcess(args)
     elif args.proc_type == 'simplex':
         process = Process(args)
+        s_dist = None
 
     # train loop
-    loss_track = []
+    loss_track, tu_track, batch_losses = [], [], []
     for epoch in range(args.epochs):
         if args.proc_type == 'simplex':
-            loss = train(model, process, loader, opt, args)
+            loss_out, tu_out = train(model, process, loader, opt, args)
+            loss = np.mean(loss_out)
+
+            # plot histogram of tu, get dist. for sample
+            hist_plot(tu_out, loss_out, save_path(args, f'hist.png'))
+            s_dist = sample_dist(tu_out, loss_out)
+            process.s_dist = s_dist # set time sampling distribution
+
         elif args.proc_type == 'cat':
             loss = cat_train(model, process, loader, opt, args)
-    
+
         # keep track of loss for training curve
         loss_track.append(loss)
         print(f'epoch: {epoch}, loss: {loss}')
 
-        # save model if best loss
+        # save model and optimizer if best loss
         if loss == min(loss_track):
-            sp = save_path(args, f'model.pt')
-            torch.save(model.state_dict(), sp)
+            torch.save(model.state_dict(), save_path(args, f'model.pt'))
+            torch.save(opt.state_dict(), save_path(args, f'opt.pt'))
 
-        # plot loss
+        # plot loss 
+        np.save(save_path(args, 'loss.npy'), np.array(loss_track))
         plt.plot(loss_track)
         plt.savefig(save_path(args, 'loss.png'))
         plt.close()

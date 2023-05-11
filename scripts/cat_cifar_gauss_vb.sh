@@ -8,3 +8,5 @@ python3 main.py \
     --q_method gauss \
     --sched_method linear \
     --epochs 3000 \
+    \
+    --p_sparse True \

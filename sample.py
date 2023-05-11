@@ -53,6 +53,8 @@ class Sampler:
         f = self.process.sde_f(x)
         g = self.process.sde_g(x)     
 
+        # set t to tensor, then get score
+        t = torch.tensor([t]).float().to(self.device)
         g2_score = model(x, t)
 
         # check f is not nan
@@ -73,18 +75,16 @@ class Sampler:
 
         # select times for nn (always 0-1)
         t = torch.tensor([1.]).to(self.device)
-        # dt for sde solver
-        t_norm = args.t_max - args.t_min
-        dt = t_norm * 1/T
 
         # noise schedule
         g_scale = np.linspace(0,1,T)[::-1]
         g_scale = 1.75*np.power(g_scale, 1.5)
 
         # time schedule
-        cdf_t = np.linspace(0,1,T+1)[::-1]
-        t = np.power(cdf_t, 1.5)
-        dt = cdf_t[1:] - cdf_t[:-1]
+        t = np.linspace(0,1,T+1)[::-1]
+        t = np.power(t, 1.5)
+        dt = t[:-1] - t[1:]
+        t = t[:-1]
 
         # sample loop
         d = 20

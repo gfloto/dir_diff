@@ -32,6 +32,7 @@ class Process:
         self.theta = args.theta
 
         self.k = args.k
+        self.s_dist = None
         self.device = args.device
 
         # useful attributes
@@ -46,9 +47,25 @@ class Process:
 
     # get t, rescale to be in proper interval
     def t(self):
-        tu = torch.rand(1)
-        t = (self.t_max - self.t_min) * tu + self.t_min
-        return t.to(self.device), tu.to(self.device)
+        # sample t from uniform distribution
+        if self.s_dist is None:
+            tu = torch.rand(1)
+            t = (self.t_max - self.t_min) * tu + self.t_min
+            return t.to(self.device), tu.to(self.device)
+        # sample from s_dist which is categorical 
+        # then cample uniformly from that interval
+        else:
+            # get bin and region (on [0,1])
+            bins = len(self.s_dist)
+            bin_id = np.random.choice(np.arange(bins), p=self.s_dist)
+            bin_min = bin_id / bins
+            bin_max = (bin_id + 1) / bins
+
+            # get tu and t
+            tu_ = torch.rand(1)
+            tu = tu_ * (bin_max - bin_min) + bin_min
+            t = (self.t_max - self.t_min) * tu + self.t_min
+            return t.to(self.device), tu.to(self.device)
 
     # mean and variance of OU process at time t
     def xt(self, x0, t):

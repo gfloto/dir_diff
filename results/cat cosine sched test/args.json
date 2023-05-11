@@ -1,1 +1,0 @@
-{"exp": "results\\cat cosine sched test", "k": 3, "proc_type": "cat", "dataset": "mnist", "lr": 0.0001, "batch_size": 128, "epochs": 250, "device": "cuda", "simplex_loc": 0.9, "T": 1000, "p_sparse": "True", "trunc_logistic": false, "lmbda": null, "q_method": "uniform", "q_sch": "idk", "sched_method": "cosine", "sparse_cat": true}

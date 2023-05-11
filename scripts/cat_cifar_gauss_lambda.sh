@@ -9,3 +9,5 @@ python3 main.py \
     --sched_method linear \
     --lmbda 0.001 \
     --epochs 3000 \
+    \
+    --p_sparse True \
