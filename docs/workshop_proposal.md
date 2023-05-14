@@ -28,7 +28,7 @@ Taking the element-wise sigmoid of an OU-process $X_t$ is a convenient way to do
 
 $$C_t = \sigma(X_t)$$
 
-In our case we are able to get an exact solution for $C_t$ by pushing forward the solution of the OU process, meaning that $C_t \sim \sigma\left[\mathcal{N}\left(X_0e^{-\theta t}, \frac{1}{2\theta}\left(1-e^{-2\theta t}\right) \right)\right]$. At each point $t$ the resulting distribution is a product of independent [logit-normal distributions](https://en.wikipedia.org/wiki/Logit-normal_distribution). We have derived $p_{0t}(\bm{x}_t | \bm{x}_0)$ and $\nabla_x \textrm{log}[p_{0t}(\bm{x}_t | \bm{x}_0)]$ already, as this is just the 1-dimensional case of the simplex math we have previously worked out.
+In our case we are able to get an exact solution for $C_t$ by pushing forward the solution of the OU process, meaning that $C_t \sim \sigma\left[\mathcal{N}\left(X_0e^{-\theta t}, \frac{1}{2\theta}\left(1-e^{-2\theta t}\right) \right)\right]$. At each point $t$ the resulting distribution is a product of independent [logit-normal distributions](https://en.wikipedia.org/wiki/Logit-normal_distribution). We have derived $p_{0t}(\mathbf{x}_t | \mathbf{x}_0)$ and $\nabla_x \textrm{log}[p_{0t}(\mathbf{x}_t | \mathbf{x}_0)]$ already, as this is just the 1-dimensional case of the simplex math we have previously worked out.
 
 # Some Practical Notes
 The forward process would take a distribution beginning at the corners of the hyper-cube at $t=0$ to the center of the cube at $t-1$. In practice we would represent categorical variables as relaxed binary strings where $0 \rightarrow 1-\alpha$ and $1 \rightarrow 1-\alpha$ for numerical stability (the logit-normal is a dirac delta at the corners of the hyper-cube). 
@@ -52,7 +52,7 @@ $$d\mathbf{x} = \left[\mathbf{f}(\mathbf{x},t) - \mathbf{G}(\mathbf{x},t) \mathb
 
 where time now flow backwards from $t=1$ to $t=0$. Given this equation, we then seek to approximate the score $\nabla_x\textrm{log }p_t(\mathbf{x})$ to create a generative model. The score can be approximated by a score based model $\mathbf{s}_{\theta}(\mathbf{x}, t)$ which can be optimized via 
 
-$$\theta^{*} = \textrm{argmin}_{\theta} \mathbb{E}_{t\sim U[0,1]} \mathbb{E}_{x_0\sim p_0(x)} \mathbb{E}_{x_t\sim p_{0t}(x_t | x_0)} \lambda(t) \left[\Vert \mathbf{s}_{\theta}(\mathbf{x}, t) - \nabla_{x_t}\textrm{log }p_{0t}(\mathbf{x}_t | \mathbf{x}_0) \Vert^2_2\right]$$
+$$\theta^{*} = \textrm{argmin}_{\theta} \mathbb{E}_{t ~ U[0,1]} \mathbb{E}_{x_0\sim p_0(x)} \mathbb{E}_{x_t\sim p_{0t}(x_t | x_0)} \lambda(t) \left[\Vert \mathbf{s}_{\theta}(\mathbf{x}, t) - \nabla_{x_t}\textrm{log }p_{0t}(\mathbf{x}_t | \mathbf{x}_0) \Vert^2_2\right]$$
 
 Thus, when making a type of score matching procedure, we need:  
 1. To sample from $p_{0t}(\mathbf{x}_t|\mathbf{x}_0)$ (which comes from the forward process)
