@@ -1,69 +1,71 @@
 import os
 import sys
-import torch
-import torch.utils.data as data
-import torchvision
 import requests
-from torchvision import transforms
-from torch.nn.functional import one_hot
-from torch.utils.data import Dataset
-from einops import rearrange
-
 import numpy as np
 from PIL import Image
+from einops import rearrange
 
+import torch
+import torchvision
+from torchvision import transforms
 from torch.functional import F
+from torch.nn.functional import one_hot
+import torch.utils.data as data
+from torch.utils.data import Dataset
 
-# convert to onehot encoding with k categories
-class Onehot(object):
-    def __init__(self, k):
+# problem: when lifting discrete to continuous
+# notions of distance must be preserved
+# this is not the case for binary or gray coding schemes
+
+
+# convert categorical to binary along some axis
+def cat2bin(x, k, axis=-1):
+    # k in the number of categories
+    # thus we has ceil(log_2(k)) bits
+    len_ = int(np.ceil(np.log2(k)))
+
+# general discretization class
+class Discretize(object):
+    def __init__(self, k, disc_type):
         self.k = k
+        self.type = disc_type
 
     def __call__(self, x):
         x *= self.k-1
-        x = torch.round(x).squeeze().type(torch.int64)  # remove channel dim
+        x = torch.round(x).type(torch.int64)
         x = one_hot(x, num_classes=self.k).type(torch.float32)
-        return rearrange(x, 'h w k -> k h w')
-
-class OnehotRGB(object):
-    def __init__(self, k):
-        self.k = k
-
-    def __call__(self, x):
-        x *= self.k-1
-        x = torch.round(x).type(torch.int64)  # remove channel dim
-        x = one_hot(x, num_classes=self.k).type(torch.float32)
-        return rearrange(x, 'c h w k -> k c h w')
+        x = rearrange(x, 'c h w k -> k c h w')
+        return x.squeeze() # remove channel dim for mnist
 
 # return mnist dataset
-def mnist_dataset(batch_size, k, root='data/', num_workers=4, size=32):
+def mnist_dataset(args, root='data/', num_workers=4, size=32):
     gray_transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Resize((size, size), antialias=True),
-        Onehot(k)])
+        Discretize(args.k, args.disc_type)])
     mnist_set = torchvision.datasets.MNIST(
         root=root, train=True, download=True, transform=gray_transform)
     mnist_loader = data.DataLoader(
-        mnist_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+        mnist_set, batch_size=args.batch_size, shuffle=True, num_workers=num_workers)
     return mnist_loader
 
 # return cifar 10 dataset
-def cifar10_dataset(batch_size, k, root='data/', num_workers=4, size=32):
+def cifar10_dataset(args, root='data/', num_workers=4, size=32):
     transform = transforms.Compose([
         transforms.ToTensor(),
-        OnehotRGB(k)
+        Discretize(args.k, args.disc_type)
     ])
     cifar10_set = torchvision.datasets.CIFAR10(
         root=root, train=True, download=True, transform=transform)
     cifar10_loader = data.DataLoader(
-        cifar10_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+        cifar10_set, batch_size=args.batch_size, shuffle=True, num_workers=num_workers)
     return cifar10_loader
 
 # return text 8 dataset
-def text8_dataset(batch_size, num_workers=4, chunk_size=256):
+def text8_dataset(args, num_workers=4, chunk_size=256):
     text8_set = Text8Dataset(chunk_size=chunk_size)
     text8_loader = data.DataLoader(
-        text8_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+        text8_set, batch_size=args.batch_size, shuffle=True, num_workers=num_workers)
     return text8_loader
 
 # text8 dataset
