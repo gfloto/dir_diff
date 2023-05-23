@@ -27,6 +27,7 @@ def get_args():
 
     # simplex diffusion params
     parser.add_argument('--simplex_loc', type=float, default=0.9, help='value s.t. s=[simplex_loc, c, c, ...]')
+    parser.add_argument('--disc_type', type=str, default='log', help='discretization type: onehot or log')
 
     # categorical diffusion params
     parser.add_argument('--q_method', type=str, default='uniform', help='noising method for categorical')
