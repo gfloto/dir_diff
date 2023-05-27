@@ -39,86 +39,22 @@ class CubeProcess:
     # true is a product identical up to sign...
     def xt(self, x0, t):
         # get mean and variance of OU process
-        mu = (-self.theta * t).exp() * self.alpha
+        mu = (-self.theta * t).exp() * x0
         var = 1/(2*self.theta) * (1 - (-2*self.theta * t).exp())
-        print(mu.shape. var.shape)
 
         # sample in R, then map to simplex
-        sample = var.sqrt() * torch.randn_like(O) + mu
-        xt = sig(sample)
+        sample = var.sqrt() * torch.randn_like(x0) + mu
+        xt = torch.sigmoid(sample)
         return xt, mu, var
 
-    # g^2 * score
+    # compute score g^2 score, which is used for numerical stability
     def g2_score(self, xt, mu, var):
-        # useful function
-        score = self.score(xt, mu, var)
-
-        g = self.sde_g(xt)
-        g2 = torch.einsum('b i j ..., b j k ... -> b i k ...', g, g)
-        g2_score = torch.einsum('b i j ..., b j ... -> b i ...', g2, score)
-        
-        return g2_score
-
-    # compute score
-    def score(self, x_, mu, var):
-        # get last component
-        xd = 1 - x_.sum(dim=1, keepdim=True)
-
-        # constant factor
-        c1 = 1/(xd.squeeze()) * (x_.log() - xd.log() - mu).sum(dim=1)
-        c1 = repeat(c1, 'b ... -> b k ...', k=self.k-1)
-
-        # unique element-wise factor
-        c2 = 1/(x_) * (x_.log() - xd.log() - mu)
-
-        # change of variables component
-        c3 = (x_ - xd) / (x_ * xd)
-
-        score = -1/var * (c1 + c2) + c3
-        return score
+        return -2*xt + mu/var - torch.logit(xt)/var - 1
     
     # make drift term sde
-    def sde_f(self, s):
-        b, k = s.shape[:2]
-
-        x = sig_inv(s)
-        beta = -self.theta*x + 0.5*(1-2*s)
-
-        # \sum_{i \neq j} X_{ij}, vectorized
-        beta_v = repeat(s*beta, 'b d ... -> b k d ...', k=self.k-1)
-        I = identity_tensor(s)
-        bsum = torch.einsum('b i j ..., b i j ... -> b i ...', 1-I, beta_v)
-
-        f = s * ( (1-s)*beta - bsum )
-        return f
-
-    # make diffusion term sde
-    def sde_g(self, s):
-        b, k = s.shape[:2]
-        I = identity_tensor(s)
-
-        neq = torch.einsum('b i ..., b j ... -> b i j ...', s, s)
-        eq = repeat(s*(1-s), 'b d ... -> b k d ...', k=self.k-1)
-
-        g1 = torch.einsum('b i j ..., b i j ... -> b i j ...', I, eq)
-        g2 = torch.einsum('b i j ..., b i j ... -> b i j ...', 1-I, neq)
-
-        g = g1 - g2
-        return g
-
-    # one-hot text to string
-        # add last component
-    def decode_text(self, encoded_text):
-        xd = 1 - torch.sum(encoded_text, dim=1, keepdim=True)
-        encoded_text = torch.cat((encoded_text, xd), dim=1)
-
-        # Convert one-hot encoding to indices
-        indices = torch.argmax(encoded_text, dim=1)
-
-        # Convert indices to characters using the idx2char dictionary
-        decoded_text = [''.join([self.idx2char[idx.item()]
-                                for idx in example]) for example in indices]
-        return decoded_text 
+    def sde_f(self, xt):
+        z = xt * (1-xt)
+        return -self.theta*torch.logit(xt)*z + 0.5*z*(1-2*xt)
 
 '''
 testing scripts for process and time sampler
@@ -131,6 +67,7 @@ from dataloader import text8_dataset, mnist_dataset, cifar10_dataset
 
 if __name__ == '__main__':
     N = 20; chars = 50
+
     # get device, data and process
     args = get_args()
     if args.dataset == 'text8':
@@ -139,7 +76,7 @@ if __name__ == '__main__':
         loader = mnist_dataset(args.batch_size, args.k)
     elif args.dataset == 'cifar10':
         loader = cifar10_dataset(args.batch_size, args.k)
-    process = Process(args)
+    process = CubeProcess(args)
 
     # test forward process
     t = torch.linspace(args.t_min, args.t_max, N).to(args.device)
