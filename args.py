@@ -17,7 +17,7 @@ def get_args():
     # add exp name
     parser.add_argument('--exp', type=str, default='dev', help='experiment name')
     parser.add_argument('--k', type=int, default=12, help='number of categories')
-    parser.add_argument('--proc_type', type=str, default='cat', help='process type: simplex or cat')
+    parser.add_argument('--proc_type', type=str, default='cube', help='process type: simplex or cat')
     parser.add_argument('--dataset', type=str, default='cifar10', help='dataset: mnist, cifar10 or text8')
     
     parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
@@ -27,7 +27,6 @@ def get_args():
 
     # simplex diffusion params
     parser.add_argument('--simplex_loc', type=float, default=0.9, help='value s.t. s=[simplex_loc, c, c, ...]')
-    parser.add_argument('--disc_type', type=str, default='log', help='discretization type: onehot or log')
 
     # categorical diffusion params
     parser.add_argument('--q_method', type=str, default='uniform', help='noising method for categorical')
@@ -49,7 +48,7 @@ def get_args():
     assert args.k > 1, 'k must be greater than 1'
     assert args.simplex_loc > 0 and args.simplex_loc < 1, 'simplex_loc must be [0,1]'
     assert args.device in ['cuda', 'cpu'], 'device must be cuda or cpu'
-    assert args.proc_type in ['cat', 'simplex'], 'process name must be cat or simplex'
+    assert args.proc_type in ['cat', 'simplex', 'cube'], 'process name must be cat or simplex'
     assert args.dataset in ['mnist', 'cifar10', 'text8'], 'dataset must be mnist, cifar10 or text8'
     assert args.q_method in ['uniform', 'sparse', 'absorbing', 'gauss', 'knn'], 'cat_method must be uniform, sparse, absorbing, gaussian or knn'
     assert args.sched_method in ['linear', 'cosine', 'mutual_info']
@@ -61,6 +60,12 @@ def get_args():
     # get process param for simplex diffusion
     if args.proc_type == 'simplex':
         args = auto_param(args) 
+    elif args.proc_type == 'cube':
+        print('using cube defaults args')
+        args.theta = 5
+        args.O = 3
+        args.t_min = 0.08
+        args.t_max = 0.8
 
     # sparse cat always true if trunc logistic is used
     if args.trunc_logistic:

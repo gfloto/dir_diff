@@ -13,11 +13,6 @@ from torch.nn.functional import one_hot
 import torch.utils.data as data
 from torch.utils.data import Dataset
 
-# problem: when lifting discrete to continuous
-# notions of distance must be preserved
-# this is not the case for binary or gray coding schemes
-
-
 # convert categorical to binary along some axis
 def cat2bin(x, k, axis=-1):
     # k in the number of categories
@@ -26,9 +21,8 @@ def cat2bin(x, k, axis=-1):
 
 # general discretization class
 class Discretize(object):
-    def __init__(self, k, disc_type):
+    def __init__(self, k):
         self.k = k
-        self.type = disc_type
 
     def __call__(self, x):
         x *= self.k-1
@@ -53,7 +47,7 @@ def mnist_dataset(args, root='data/', num_workers=4, size=32):
 def cifar10_dataset(args, root='data/', num_workers=4, size=32):
     transform = transforms.Compose([
         transforms.ToTensor(),
-        Discretize(args.k, args.disc_type)
+        Discretize(args.k)
     ])
     cifar10_set = torchvision.datasets.CIFAR10(
         root=root, train=True, download=True, transform=transform)

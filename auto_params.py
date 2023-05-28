@@ -201,10 +201,11 @@ def auto_param(args):
     cat_mag = 0.9
 
     # check for previous solved args
-    out = param_check(k, cat_mag, args)
-    if out is not None:
-        print('using previous params')
-        return out
+    print('not checking for params!!')
+    #out = param_check(k, cat_mag, args)
+    #if out is not None:
+        #print('using previous params')
+        #return out
     print('getting new params')
 
     # set initial value

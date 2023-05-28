@@ -11,7 +11,7 @@ diffusion on cube sigmoid(OU)
 
 class CubeProcess:
     def __init__(self, args):
-        self.alpha = args.alpha
+        self.O = args.O
         self.t_min = args.t_min
         self.t_max = args.t_max
         self.theta = args.theta
@@ -38,8 +38,10 @@ class CubeProcess:
     # mean and variance of OU process at time t
     # true is a product identical up to sign...
     def xt(self, x0, t):
+        x0 = 2*x0 - 1
+
         # get mean and variance of OU process
-        mu = (-self.theta * t).exp() * x0
+        mu = (-self.theta * t).exp() * self.O * x0
         var = 1/(2*self.theta) * (1 - (-2*self.theta * t).exp())
 
         # sample in R, then map to simplex
@@ -71,11 +73,11 @@ if __name__ == '__main__':
     # get device, data and process
     args = get_args()
     if args.dataset == 'text8':
-        loader = text8_dataset(args.batch_size)
+        loader = text8_dataset(args)
     elif args.dataset == 'mnist':
-        loader = mnist_dataset(args.batch_size, args.k)
+        loader = mnist_dataset(args)
     elif args.dataset == 'cifar10':
-        loader = cifar10_dataset(args.batch_size, args.k)
+        loader = cifar10_dataset(args)
     process = CubeProcess(args)
 
     # test forward process
@@ -86,6 +88,7 @@ if __name__ == '__main__':
     if isinstance(x0, tuple) or isinstance(x0, list):
         x0 = x0[0] 
     x0 = x0.to(args.device)
+    print(x0[0,:,0,0,0])
    
     # print initial text
     if process.data_type == 'text':
@@ -96,6 +99,7 @@ if __name__ == '__main__':
     for i in range(N):
         # generate and save image
         xt, _, _ = process.xt(x0.clone(), t[i])
+        print(xt[0,:,0,0,0])
 
         if process.data_type == 'image':
             save_vis(xt, f'imgs/{i}.png', k=args.k)
