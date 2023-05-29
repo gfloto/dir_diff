@@ -51,12 +51,16 @@ class CubeProcess:
 
     # compute score g^2 score, which is used for numerical stability
     def g2_score(self, xt, mu, var):
-        return -2*xt + mu/var - torch.logit(xt)/var - 1
+        return - (xt*(xt-1)) * (2*xt + mu/var - torch.logit(xt)/var - 1)
     
     # make drift term sde
     def sde_f(self, xt):
         z = xt * (1-xt)
-        return -self.theta*torch.logit(xt)*z + 0.5*z*(1-2*xt)
+        return self.theta*torch.logit(xt)*z + 0.5*z*(1-2*xt)
+
+    # make diffusion term sde
+    def sde_g(self, xt):
+        return xt * (1-xt)
 
 '''
 testing scripts for process and time sampler
@@ -88,7 +92,6 @@ if __name__ == '__main__':
     if isinstance(x0, tuple) or isinstance(x0, list):
         x0 = x0[0] 
     x0 = x0.to(args.device)
-    print(x0[0,:,0,0,0])
    
     # print initial text
     if process.data_type == 'text':

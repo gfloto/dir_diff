@@ -15,7 +15,7 @@ def str2bool(x):
 def get_args():
     parser = argparse.ArgumentParser()
     # add exp name
-    parser.add_argument('--exp', type=str, default='dev', help='experiment name')
+    parser.add_argument('--exp', type=str, default='cube', help='experiment name')
     parser.add_argument('--k', type=int, default=12, help='number of categories')
     parser.add_argument('--proc_type', type=str, default='cube', help='process type: simplex or cat')
     parser.add_argument('--dataset', type=str, default='cifar10', help='dataset: mnist, cifar10 or text8')

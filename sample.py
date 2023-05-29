@@ -5,7 +5,8 @@ from tqdm import tqdm
 from einops import repeat, rearrange
 
 from model import Unet
-from process import sig, Process 
+from process import Process 
+from cube_proc import CubeProcess
 from plot import save_vis, make_gif
 from utils import save_path
 
@@ -28,7 +29,13 @@ class Sampler:
         self.k = args.k
         self.device = device
         self.batch_size = batch_size
-        self.process = Process(args) # for sde_f and sde_g
+        self.proc_type = args.proc_type
+        
+        # process object for sde f and g
+        if args.proc_type == 'simplex':
+            self.process = Process(args)
+        elif args.proc_type == 'cube':
+            self.process = CubeProcess(args)
 
         # shapes for image vs text datasets
         if args.dataset in ['mnist', 'cifar10']:
@@ -39,11 +46,12 @@ class Sampler:
     # get intial distribution at t = t_max
     def init_sample(self):
         var = 1/(2*self.theta)
+        k_ = args.k-1 if self.proc_type == 'simplex' else args.k
         if args.dataset == 'mnist':
-            sample = (np.sqrt(var) * torch.randn(self.batch_size, self.k-1, *self.end_shape)).to(self.device)
+            sample = (np.sqrt(var) * torch.randn(self.batch_size, k_, *self.end_shape)).to(self.device)
         elif args.dataset == 'cifar10':
-            sample = (np.sqrt(var) * torch.randn(self.batch_size, self.k-1, 3, *self.end_shape)).to(self.device)
-        x = sig(sample) 
+            sample = (np.sqrt(var) * torch.randn(self.batch_size, k_, 3, *self.end_shape)).to(self.device)
+        x = torch.sigmoid(sample) 
         return x
 
     # backward: dx = [f(x,t) - g(x)^2 score_t(x)]dt + g(t)dB
@@ -62,53 +70,58 @@ class Sampler:
         dB = (np.sqrt(dt) * torch.randn_like(g2_score)).to(self.device) 
 
         # solve sde: https://en.wikipedia.org/wiki/Euler%E2%80%93Maruyama_method 
-        gdB = torch.einsum('b i j ..., b j ... -> b i ...', g, dB)
+        if self.proc_type == 'simplex':
+            gdB = torch.einsum('b i j ..., b j ... -> b i ...', g, dB)
+        elif self.proc_type == 'cube':
+            gdB = g * dB
         return (-f + g2_score)*dt + g_scale*gdB
 
     @torch.no_grad()
-    def __call__(self, model, T, save_path='sample.png', order=1, d=10, pad=1e-3, vis=True):
+    def __call__(self, model, T, save_path='sample.png', order=1, d=10, pad=1e-2, vis=True):
         if save_path is not None:
             os.makedirs('imgs', exist_ok=True)
 
         # initialize sample
         x = self.init_sample().to(self.device)
 
-        # select times for nn (always 0-1)
-        t = torch.tensor([1.]).to(self.device)
-
         # noise schedule
         g_scale = np.linspace(0,1,T)[::-1]
         g_scale = 1.75*np.power(g_scale, 1.5)
 
         # time schedule
-        t = np.linspace(0,1,T+1)[::-1]
-        t = np.power(t, 1.5)
-        dt = t[:-1] - t[1:]
-        t = t[:-1]
+        t = 1.
+        dt = (self.t_max - self.t_min) / T
 
         # sample loop
         d = 20
         for i in tqdm(range(T)):
             # update x
-            change = self.update(model, x, t[i], dt[i], g_scale[i])
+            change = self.update(model, x, t, dt, g_scale[i])
             x = x + change
+            t -= 1/T
 
             # keep in simplex 
-            x = torch.clamp(x, pad, 1-pad)
-            xsum = x.sum(1, keepdim=True)
-            x = torch.where(xsum > 1-pad, (1-pad)*x/xsum, x)
+            if self.proc_type == 'simplex':
+                x = torch.clamp(x, pad, 1-pad)
+                xsum = x.sum(1, keepdim=True)
+                x = torch.where(xsum > 1-pad, (1-pad)*x/xsum, x)
+
+            # keep in cube
+            elif self.proc_type == 'cube':
+                x = torch.clamp(x, pad, 1-pad)
 
             # save sample
             if save_path is not None:
                 # normalize change to be [0, 1] to visualize 
-                change = (change - change.min()) / (change.max() - change.min())
-                if vis:
-                    save_vis([x.clone()], f'imgs/{int(i/d)}.png', k=self.k)
+                if vis and i%d == 0:
+                    simplex = self.proc_type == 'simplex'
+                    save_vis([x.clone()], f'imgs/{int(i/d)}.png', k=self.k, simplex=simplex)
 
         # discretize
         if vis:
             for i in range(int(T/d), int(T/d)+10):
-                save_vis(x, f'imgs/{i}.png', k=self.k)
+                simplex = self.proc_type == 'simplex'
+                save_vis(x, f'imgs/{t}.png', k=self.k, simplex=simplex)
 
         # save gif
         if vis:
@@ -139,11 +152,11 @@ if __name__ == '__main__':
 
     # load model
     if args.dataset == 'mnist':
-        ch = args.k if args.proc_type == 'cat' else args.k-1
+        ch = args.k if args.proc_type in ['cat', 'cube'] else args.k-1
         model = Unet(dim=64, channels=ch).to(args.device)
     elif args.dataset == 'cifar10':
-        ch = 3*args.k if args.proc_type == 'cat' else 3*(args.k-1)
-        model = Unet(dim=64, channels=ch).to(args.device)
+        ch = 3*args.k if args.proc_type in ['cat', 'cube'] else 3*(args.k-1)
+        model = Unet(dim=128, channels=ch).to(args.device)
 
     model_path = os.path.join('results', sample_args.exp, f'model.pt')
     model.load_state_dict(torch.load(model_path, map_location=device))
@@ -152,4 +165,4 @@ if __name__ == '__main__':
 
     # sample from model
     sampler = Sampler(args, batch_size=batch_size, device=device)
-    sampler(model, T=2000, save_path=save_path(args, 'sample.gif'))
+    sampler(model, T=1000, save_path=save_path(args, 'sample.gif'))

@@ -9,6 +9,7 @@ from model import Unet, Transformer
 from train import train, cat_train
 from dataloader import text8_dataset, mnist_dataset, cifar10_dataset
 from cat import CatProcess
+from cube_proc import CubeProcess
 from process import Process
 from utils import save_path, sample_dist
 from plot import hist_plot
@@ -30,27 +31,27 @@ if __name__ == '__main__':
     print(f'device: {args.device}')
     print(f'method: {args.proc_type}, dataset: {args.dataset}')
 
-    if args.proc_type == 'simplex':
+    if args.proc_type in ['simplex', 'cube']:
         print(f'theta: {args.theta:.4f}, O: {args.O}, t-min: {args.t_min:.4f}, t-max: {args.t_max:.4f}')
     elif args.proc_type == 'cat':
         print(f'q method: {args.q_method}, k: {args.k}, T: {args.T}, sparse: {args.p_sparse}, trunc: {args.trunc_logistic}, sched_method: {args.sched_method}')
 
     # load dataset
     if args.dataset == 'text8':
-        loader = text8_dataset(args.batch_size)
+        loader = text8_dataset(args)
     elif args.dataset == 'mnist':
-        loader = mnist_dataset(args.batch_size, args.k)
+        loader = mnist_dataset(args)
     elif args.dataset == 'cifar10':
-        loader = cifar10_dataset(args.batch_size, args.k)
+        loader = cifar10_dataset(args)
 
     # load model and optimizer
     if args.dataset == 'mnist':
-        ch = args.k if args.proc_type == 'cat' else args.k-1
+        ch = args.k if args.proc_type in ['cat', 'cube'] else args.k-1
         model = Unet(dim=64, channels=ch).to(args.device)
         print(f'Number of parameters: {sum(p.numel() for p in model.parameters())}')
     elif args.dataset == 'cifar10':
-        ch = 3*args.k if args.proc_type == 'cat' else 3*(args.k-1)
-        model = Unet(dim=64, channels=ch).to(args.device)
+        ch = 3*args.k if args.proc_type in ['cat', 'cube'] else 3*(args.k-1)
+        model = Unet(dim=128, channels=ch).to(args.device)
         print(f'Number of parameters: {sum(p.numel() for p in model.parameters())}')
     elif args.dataset == 'text8':
         model = Transformer(emb_dim=256, vocab_size=27).to(args.device)
@@ -67,9 +68,11 @@ if __name__ == '__main__':
     # load process
     if args.proc_type == 'cat':
         process = CatProcess(args)
-    elif args.proc_type == 'simplex':
+    elif args.proc_type in 'simplex':
         process = Process(args)
         s_dist = None
+    elif args.proc_type == 'cube':
+        process = CubeProcess(args)
 
     # train loop
     loss_track, tu_track, batch_losses = [], [], []
@@ -83,6 +86,10 @@ if __name__ == '__main__':
 
         elif args.proc_type == 'cat':
             loss = cat_train(model, process, loader, opt, args)
+
+        elif args.proc_type == 'cube':
+            loss_out, _ = train(model, process, loader, opt, args)
+            loss = np.mean(loss_out)
 
         # keep track of loss for training curve
         loss_track.append(loss)

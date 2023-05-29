@@ -23,7 +23,7 @@ def make_gif(path, name, n):
 
 # visualize images
 # x can be list of tensors or tensor
-def save_vis(x, path, k, n=8):
+def save_vis(x, path, k, n=8, simplex=True):
     # if not list, make list (to make process the same)
     if not isinstance(x, list):
         x = [x]
@@ -36,13 +36,16 @@ def save_vis(x, path, k, n=8):
         assert torch.all(x[i] >= 0)
         assert torch.all(x[i] <= 1)
 
-        # convert from onehot to categorical
-        xd = 1 - torch.sum(x[i], dim=1, keepdim=True)
-        x[i] = torch.cat((x[i], xd), dim=1)
+        if simplex:
+            # convert from onehot to categorical
+            xd = 1 - torch.sum(x[i], dim=1, keepdim=True)
+            x[i] = torch.cat((x[i], xd), dim=1)
 
-        # convert to categorical
-        x[i] = onehot2cat(x[i], k=k)
-        x[i] = x[i] / (k-1)
+            # convert to categorical
+            x[i] = onehot2cat(x[i], k=k)
+            x[i] = x[i] / (k-1)
+        else:
+            x[i] = x[i].argmax(dim=1) / (k-1)
 
     # stitch list using einops
     imgs = len(x)
