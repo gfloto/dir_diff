@@ -82,7 +82,7 @@ def draw_pdf_contours(dist, border=False, nlevels=600, subdiv=8, **kwargs):
     trimesh = refiner.refine_triangulation(subdiv=subdiv)
     pvals = [dist.pdf(xy2bc(xy)) for xy in zip(trimesh.x, trimesh.y)]
 
-    plt.tricontourf(trimesh, pvals, nlevels, cmap='gist_earth', **kwargs)
+    plt.tricontourf(trimesh, pvals, nlevels, cmap='RdYlBu_r', **kwargs)
     plt.axis('equal')
     plt.xlim(0, 1)
     plt.ylim(0, 0.75**0.5)
@@ -125,9 +125,11 @@ if __name__ == '__main__':
         dist = LogitNormal(mu, sigma)
         draw_pdf_contours(dist)
         title = f'$\mu$ = {tuple(mu)}\n$\sigma$ = {tuple(sigma)}'
-        plt.title(title, fontdict={'fontsize': 8})
+        # plt.title(title, fontdict={'fontsize': 8})
         # plt.subplot(2, len(mus), i + 1 + len(mus))
         # plot_points(dist.sample(5000))
-    plt.savefig('logitnormal_plots.png')
+    plt.tight_layout()
+    plt.rcParams["text.usetex"] = True
+    plt.savefig('logitnormal_plots.png', dpi=1200)
     print('Wrote plots to "logitnormal_plots.png".')
 

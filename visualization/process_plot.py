@@ -67,7 +67,8 @@ plt.xlabel("x")
 sns.despine()  # Remove the top and right spines
 plt.tight_layout()  # Make the plot fill out the figure area
 
-plt.show()
+# save as pdf
+plt.savefig('process_plot.pdf', bbox_inches='tight')
 
 
 
