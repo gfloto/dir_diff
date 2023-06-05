@@ -109,7 +109,7 @@ def plot_points(X, barycentric=True, border=True, **kwargs):
         plt.triplot(_triangle, linewidth=1)
 
 if __name__ == '__main__':
-    f = plt.figure(figsize=(8, 6))
+    f = plt.figure(figsize=(6, 3))
     mus = [[0.999] * 3,
            [0.5] * 3,
            [0.6, 0.2, 0.999]]
@@ -117,13 +117,13 @@ if __name__ == '__main__':
               [1.8] * 3,
               [1.2, 0.5, 2.2]]
     for i, (mu, sigma) in enumerate(zip(mus, sigmas)):
-        plt.subplot(2, len(mus), i + 1)
+        plt.subplot(1, len(mus), i + 1)
         dist = LogitNormal(mu, sigma)
         draw_pdf_contours(dist)
         title = '$\mu$ = (%.3f, %.3f, %.3f)\n$\sigma$ = (%.3f, %.3f, %.3f)' % (tuple(mu) + tuple(sigma))
         plt.title(title, fontdict={'fontsize': 8})
-        plt.subplot(2, len(mus), i + 1 + len(mus))
-        plot_points(dist.sample(5000))
+        # plt.subplot(2, len(mus), i + 1 + len(mus))
+        # plot_points(dist.sample(5000))
     plt.savefig('logitnormal_plots.png')
     print('Wrote plots to "logitnormal_plots.png".')
 
