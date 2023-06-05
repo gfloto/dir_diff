@@ -34,7 +34,7 @@ import seaborn as sns
 
 # Set the theme to whitegrid and customize the style
 sns.set_style("whitegrid")
-sns.set_context("notebook", font_scale=1.8, rc={"lines.linewidth": 2})
+sns.set_context("notebook", font_scale=1.3, rc={"lines.linewidth": 2})
 
 colors = ["#FF9B85", "#73A88C", "#6991CF"]
 # Set the font to be LaTeX-like
@@ -48,7 +48,7 @@ def logistic(y):
 y_values = np.linspace(-7, 7, 1000000)  # Generate more evenly spaced points
 x_values = logistic(y_values)  # Transform the y values into the interval (0, 1)
 
-plt.figure(figsize=(8, 8))
+plt.figure(figsize=(6, 6))
 
 plt.plot(x_values, p(x_values), color=colors[0], label="$p(x)$")
 plt.plot(x_values, d(x_values), color=colors[1], label=r"$\nabla\log p(x)$")
@@ -60,7 +60,9 @@ plt.axvline(x=0.6, linestyle='--', color='black', linewidth=1.5)
 plt.ylim(-2, 10)  # Limit the range of the y-axis
 
 plt.grid(True)  # Add grid lines
-plt.legend(loc="best")
+# plt.legend(loc="best")
+# Add legend to top left
+plt.legend(loc=2, bbox_to_anchor=(0.02, 0.99), borderaxespad=0., prop={'size': 16})
 plt.xlabel("x")
 sns.despine()  # Remove the top and right spines
 plt.tight_layout()  # Make the plot fill out the figure area

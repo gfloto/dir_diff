@@ -41,20 +41,26 @@ class LogitNormal(object):
         '''Returns pdf value for `x`.'''
         epsilon = 1e-5
         x = np.clip(x, epsilon, 1 - epsilon)
-        logit_x = np.log(x / (1 - x))  # transforming to logit space
-        norm_const = np.prod(1 / (x * (1 - x)))
+        x_D = x[-1] # last element of x
+        x_without_D = x[:-1] # first D-1 elements of x
+        logit_x = np.log(x_without_D / x_D)  # transforming to logit space
+        norm_const = 1 / np.prod(x)  # Jacobian determinant
+        # multivariate normal pdf
         pdf_val = norm_const * multivariate_normal.pdf(logit_x, mean=self._mu, cov=self._sigma)
         return pdf_val
+
 
     def sample(self, N):
         '''Generates a random sample of size `N`.'''
         sample_norm = np.random.multivariate_normal(self._mu, self._sigma, N)
-        sample_logit = scipy.special.expit(sample_norm)
-        # normalize to make the samples sum to 1
-        sample_logit /= np.sum(sample_logit, axis=1, keepdims=True)
+        exp_y = np.exp(sample_norm)
+        ones_column = np.ones((N, 1))  # Create a column of ones
+        exp_y = np.hstack((exp_y, ones_column))  # Append a column of ones to exp_y
+        sample_logit = exp_y / (1 + np.sum(exp_y, axis=1, keepdims=True))
         return sample_logit
 
-def draw_pdf_contours(dist, border=False, nlevels=400, subdiv=8, **kwargs):
+
+def draw_pdf_contours(dist, border=False, nlevels=600, subdiv=8, **kwargs):
     '''Draws pdf contours over an equilateral triangle (2-simplex).
 
     Arguments:
@@ -76,7 +82,7 @@ def draw_pdf_contours(dist, border=False, nlevels=400, subdiv=8, **kwargs):
     trimesh = refiner.refine_triangulation(subdiv=subdiv)
     pvals = [dist.pdf(xy2bc(xy)) for xy in zip(trimesh.x, trimesh.y)]
 
-    plt.tricontourf(trimesh, pvals, nlevels, cmap='jet', **kwargs)
+    plt.tricontourf(trimesh, pvals, nlevels, cmap='gist_earth', **kwargs)
     plt.axis('equal')
     plt.xlim(0, 1)
     plt.ylim(0, 0.75**0.5)
@@ -110,17 +116,15 @@ def plot_points(X, barycentric=True, border=True, **kwargs):
 
 if __name__ == '__main__':
     f = plt.figure(figsize=(6, 3))
-    mus = [[0.999] * 3,
-           [0.5] * 3,
-           [0.6, 0.2, 0.999]]
-    sigmas = [[0.9] * 3,
-              [1.8] * 3,
-              [1.2, 0.5, 2.2]]
+    mus = [[0, 0],
+           [0.2, 0.35]]
+    sigmas = [[0.5, 0.5],
+              [0.6, 0.8]]
     for i, (mu, sigma) in enumerate(zip(mus, sigmas)):
         plt.subplot(1, len(mus), i + 1)
         dist = LogitNormal(mu, sigma)
         draw_pdf_contours(dist)
-        title = '$\mu$ = (%.3f, %.3f, %.3f)\n$\sigma$ = (%.3f, %.3f, %.3f)' % (tuple(mu) + tuple(sigma))
+        title = f'$\mu$ = {tuple(mu)}\n$\sigma$ = {tuple(sigma)}'
         plt.title(title, fontdict={'fontsize': 8})
         # plt.subplot(2, len(mus), i + 1 + len(mus))
         # plot_points(dist.sample(5000))
