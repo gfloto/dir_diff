@@ -36,7 +36,7 @@ def mnist_dataset(args, root='data/', num_workers=4, size=32):
     gray_transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Resize((size, size), antialias=True),
-        Discretize(args.k, args.disc_type)])
+        Discretize(args.k)])
     mnist_set = torchvision.datasets.MNIST(
         root=root, train=True, download=True, transform=gray_transform)
     mnist_loader = data.DataLoader(
@@ -54,6 +54,45 @@ def cifar10_dataset(args, root='data/', num_workers=4, size=32):
     cifar10_loader = data.DataLoader(
         cifar10_set, batch_size=args.batch_size, shuffle=True, num_workers=num_workers)
     return cifar10_loader
+
+# return cifar 10 dataset
+def city_dataset(args, num_workers=4, size=32):
+    transform = transforms.Compose([
+        transforms.Resize((2*size, 4*size), antialias=True),
+        transforms.RandomCrop((size, 2*size)),
+        transforms.RandomHorizontalFlip(),
+        Discretize(args.k)
+    ])
+    city_set = CityDataset(
+        img_path='data/cityscapes/labels', transform=transform)
+    cifar10_loader = data.DataLoader(
+        city_set, batch_size=args.batch_size, shuffle=True, num_workers=num_workers)
+    return cifar10_loader
+
+# custom dataloader for city
+class CityDataset(Dataset):
+    def __init__(self, img_path, transform):
+        self.img_path = img_path
+        self.transform = transform
+
+        # get all image names
+        self.img_names = os.listdir(img_path)
+        self.img_names = [name for name in self.img_names if name.endswith('.pt')]
+        self.len_ = len(self.img_names)
+
+    def __getitem__(self, index):
+        # get images, then label
+        img = torch.load(os.path.join(self.img_path, self.img_names[index]))
+        img = img[None, ...]
+        img = img.type(torch.float32)
+        img /= 34.0
+
+        # try using float16
+        img = self.transform(img)
+        return img
+
+    def __len__(self):
+        return self.len_
 
 # return text 8 dataset
 def text8_dataset(args, num_workers=4, chunk_size=256):

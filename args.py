@@ -15,14 +15,14 @@ def str2bool(x):
 def get_args():
     parser = argparse.ArgumentParser()
     # add exp name
-    parser.add_argument('--exp', type=str, default='cube', help='experiment name')
-    parser.add_argument('--k', type=int, default=12, help='number of categories')
+    parser.add_argument('--exp', type=str, default='city', help='experiment name')
+    parser.add_argument('--k', type=int, default=10, help='number of categories')
     parser.add_argument('--proc_type', type=str, default='cube', help='process type: simplex or cat')
-    parser.add_argument('--dataset', type=str, default='cifar10', help='dataset: mnist, cifar10 or text8')
+    parser.add_argument('--dataset', type=str, default='city', help='dataset: mnist, cifar10 or text8')
     
-    parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
+    parser.add_argument('--lr', type=float, default=5e-5, help='learning rate')
     parser.add_argument('--batch_size', type=int, default=128, help='batch size')
-    parser.add_argument('--epochs', type=int, default=2500, help='number of epochs')
+    parser.add_argument('--epochs', type=int, default=10000, help='number of epochs')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
 
     # simplex diffusion params
@@ -49,13 +49,15 @@ def get_args():
     assert args.simplex_loc > 0 and args.simplex_loc < 1, 'simplex_loc must be [0,1]'
     assert args.device in ['cuda', 'cpu'], 'device must be cuda or cpu'
     assert args.proc_type in ['cat', 'simplex', 'cube'], 'process name must be cat or simplex'
-    assert args.dataset in ['mnist', 'cifar10', 'text8'], 'dataset must be mnist, cifar10 or text8'
+    assert args.dataset in ['mnist', 'cifar10', 'text8', 'city'], 'dataset must be mnist, cifar10 or text8'
     assert args.q_method in ['uniform', 'sparse', 'absorbing', 'gauss', 'knn'], 'cat_method must be uniform, sparse, absorbing, gaussian or knn'
     assert args.sched_method in ['linear', 'cosine', 'mutual_info']
 
     # text8 automatically has 27 categories
     if args.dataset == 'text8':
         args.k = 27
+    elif args.dataset == 'city':
+        args.k = 34
 
     # get process param for simplex diffusion
     if args.proc_type == 'simplex':

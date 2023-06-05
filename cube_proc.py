@@ -51,12 +51,12 @@ class CubeProcess:
 
     # compute score g^2 score, which is used for numerical stability
     def g2_score(self, xt, mu, var):
-        return - (xt*(xt-1)) * (2*xt + mu/var - torch.logit(xt)/var - 1)
+        return (xt * (xt-1)) * (torch.logit(xt)/var - 2*xt - mu/var + 1)
     
     # make drift term sde
     def sde_f(self, xt):
         z = xt * (1-xt)
-        return self.theta*torch.logit(xt)*z + 0.5*z*(1-2*xt)
+        return -self.theta*torch.logit(xt)*z + 0.5*z*(1-2*xt)
 
     # make diffusion term sde
     def sde_g(self, xt):
