@@ -4,7 +4,6 @@ import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
-from taming.models.vqgan import VQModel
 from taming.modules.losses.vqperceptual import VQLPIPSWithDiscriminator
 
 from utils import get_model
