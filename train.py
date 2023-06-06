@@ -5,6 +5,7 @@ import numpy as np
 from torch.nn.functional import softmax 
 
 from utils import ptnp, onehot2cat
+from plot import save_vis
 
 def train(model, process, loader, opt, args):
     device = args.device; k = args.k
@@ -32,6 +33,7 @@ def train(model, process, loader, opt, args):
         # backward pass
         opt.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
 
         # save loss

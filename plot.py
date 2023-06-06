@@ -21,9 +21,15 @@ def make_gif(path, name, n):
     # remove images and folder
     shutil.rmtree('imgs')
 
+# sample from categorical on dim 1
+def sample_cat(x, k):
+    x = rearrange(x, 'b k h w -> b h w k')
+    x = torch.distributions.Categorical(probs=x).sample()
+    return x
+
 # visualize images
 # x can be list of tensors or tensor
-def save_vis(x, path, k, n=8, simplex=True):
+def save_vis(x, path, k, simplex=[True], n=8):
     # if not list, make list (to make process the same)
     if not isinstance(x, list):
         x = [x]
@@ -33,18 +39,13 @@ def save_vis(x, path, k, n=8, simplex=True):
 
     # ensure x is in [0, 1]
     for i in range(len(x)):
-        assert torch.all(x[i] >= 0)
-        assert torch.all(x[i] <= 1)
+        #assert torch.all(x[i] >= 0)
+        #assert torch.all(x[i] <= 1)
 
-        if simplex:
+        if simplex[i]:
             # convert from onehot to categorical
             xd = 1 - torch.sum(x[i], dim=1, keepdim=True)
             x[i] = torch.cat((x[i], xd), dim=1)
-
-            # convert to categorical
-            x[i] = onehot2cat(x[i], k=k)
-            x[i] = x[i] / (k-1)
-        else:
             x[i] = x[i].argmax(dim=1) / (k-1)
 
     # stitch list using einops
@@ -54,24 +55,36 @@ def save_vis(x, path, k, n=8, simplex=True):
             x[i] = rearrange(x[i][:n], 'b h w -> h (b w)', b=n)
         elif len(x[i].shape) == 4: # ie. [b, k, h, w]
             x[i] = rearrange(x[i][:n], 'b c h w -> c h (b w)', b=n)
+        x[i] = x[i].detach().cpu().numpy()
 
     # reshape into final image
-    x = torch.stack(x)
-    if len(x.shape) == 3:
-        x = rearrange(x, 'b h w -> (b h) w', b=imgs)
-    elif len(x.shape) == 4:
-        x = rearrange(x, 'b c h w -> (b h) w c', b=imgs)
+    #x = torch.stack(x)
+    #if len(x.shape) == 3:
+        #x = rearrange(x, 'b h w -> (b h) w', b=imgs)
+    #elif len(x.shape) == 4:
+        #x = rearrange(x, 'b c h w -> (b h) w c', b=imgs)
 
-    # convert to numpy and save
-    img = x.detach().cpu().numpy()
+    ## convert to numpy and save
+    #img = x.detach().cpu().numpy()
 
     # save image
     fig = plt.figure(figsize=(2*n, 2*imgs))
-    plt.imshow(img, cmap='gray', vmin=0, vmax=1)
-    plt.axis('off')
+    ax1 = fig.add_subplot(211)
+    ax1.imshow(x[0], cmap='gray', vmin=0, vmax=1)
+    ax1.axis('off')
+    ax2 = fig.add_subplot(212)
+    ax2.imshow(x[1], cmap='gray', vmin=x[1].min(), vmax=x[1].max())
+    ax2.axis('off')
     plt.tight_layout()
     plt.savefig(path)
     plt.close()
+
+    #fig = plt.figure(figsize=(2*n, 2*imgs))
+    #plt.imshow(img, cmap='gray', vmin=0, vmax=1)
+    #plt.axis('off')
+    #plt.tight_layout()
+    #plt.savefig(path)
+    #plt.close()
 
 # plot loss, use log scale 
 def plot_loss(loss, path):

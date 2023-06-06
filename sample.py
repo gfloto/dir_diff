@@ -5,10 +5,17 @@ from tqdm import tqdm
 from einops import repeat, rearrange
 
 from model import Unet
-from process import Process 
+from process import Process, sig 
 from cube_proc import CubeProcess
 from plot import save_vis, make_gif
 from utils import save_path
+
+# get entropy on first dim
+def entropy(x):
+    xd = 1 - torch.sum(x, dim=1, keepdim=True)
+    x = torch.cat((x, xd), dim=1)
+    print(x[:,:,15,15])
+    return -(x * x.log()).sum(dim=1)
 
 '''
 score matching sampling from: https://arxiv.org/abs/2011.13456
@@ -42,16 +49,18 @@ class Sampler:
             self.end_shape = (32, 32)
         elif args.dataset == 'text8':
             self.end_shape = (8)
+        elif args.dataset == 'city':
+            self.end_shape = (32, 64)
 
     # get intial distribution at t = t_max
     def init_sample(self):
         var = 1/(2*self.theta)
         k_ = args.k-1 if self.proc_type == 'simplex' else args.k
-        if args.dataset == 'mnist':
+        if args.dataset in ['mnist', 'city']:
             sample = (np.sqrt(var) * torch.randn(self.batch_size, k_, *self.end_shape)).to(self.device)
         elif args.dataset == 'cifar10':
             sample = (np.sqrt(var) * torch.randn(self.batch_size, k_, 3, *self.end_shape)).to(self.device)
-        x = torch.sigmoid(sample) 
+        x = sig(sample) 
         return x
 
     # backward: dx = [f(x,t) - g(x)^2 score_t(x)]dt + g(t)dB
@@ -96,7 +105,7 @@ class Sampler:
         d = 20
         for i in tqdm(range(T)):
             # update x
-            change = self.update(model, x, t, dt, g_scale[i])
+            change = self.update(model, x, t, dt)#, g_scale[i])
             x = x + change
             t -= 1/T
 
@@ -111,17 +120,15 @@ class Sampler:
                 x = torch.clamp(x, pad, 1-pad)
 
             # save sample
-            if save_path is not None:
-                # normalize change to be [0, 1] to visualize 
-                if vis and i%d == 0:
-                    simplex = self.proc_type == 'simplex'
-                    save_vis([x.clone()], f'imgs/{int(i/d)}.png', k=self.k, simplex=simplex)
+            # normalize change to be [0, 1] to visualize 
+            if save_path is not None and vis and i%d == 0:
+                save_vis([x.clone(), entropy(x.clone())], f'imgs/{int(i/d)}.png', k=self.k, simplex=[True, False])
 
         # discretize
         if vis:
             for i in range(int(T/d), int(T/d)+10):
                 simplex = self.proc_type == 'simplex'
-                save_vis(x, f'imgs/{t}.png', k=self.k, simplex=simplex)
+                save_vis([x.clone(), entropy(x.clone())], f'imgs/{i}.png', k=self.k, simplex=[True, False])
 
         # save gif
         if vis:
@@ -141,7 +148,7 @@ def get_sample_args():
     return args
 
 if __name__ == '__main__':
-    batch_size = 128
+    batch_size = 256
     sample_args = get_sample_args()
     path = os.path.join('results', sample_args.exp)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -151,7 +158,7 @@ if __name__ == '__main__':
     args = argparse.Namespace(**args)
 
     # load model
-    if args.dataset == 'mnist':
+    if args.dataset in ['mnist', 'city']:
         ch = args.k if args.proc_type in ['cat', 'cube'] else args.k-1
         model = Unet(dim=64, channels=ch).to(args.device)
     elif args.dataset == 'cifar10':
@@ -162,6 +169,8 @@ if __name__ == '__main__':
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval() 
     print(f'Loaded model from {model_path}')
+
+    print(f'Number of parameters: {sum(p.numel() for p in model.parameters())}')
 
     # sample from model
     sampler = Sampler(args, batch_size=batch_size, device=device)

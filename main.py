@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from args import get_args
 from model import Unet, Transformer
 from train import train, cat_train
-from dataloader import text8_dataset, mnist_dataset, cifar10_dataset
+from dataloader import text8_dataset, mnist_dataset, cifar10_dataset, city_dataset
 from cat import CatProcess
 from cube_proc import CubeProcess
 from process import Process
@@ -43,20 +43,20 @@ if __name__ == '__main__':
         loader = mnist_dataset(args)
     elif args.dataset == 'cifar10':
         loader = cifar10_dataset(args)
+    elif args.dataset == 'city':
+        loader = city_dataset(args)
 
     # load model and optimizer
-    if args.dataset == 'mnist':
+    if args.dataset in ['mnist', 'city']:
         ch = args.k if args.proc_type in ['cat', 'cube'] else args.k-1
         model = Unet(dim=64, channels=ch).to(args.device)
-        print(f'Number of parameters: {sum(p.numel() for p in model.parameters())}')
     elif args.dataset == 'cifar10':
         ch = 3*args.k if args.proc_type in ['cat', 'cube'] else 3*(args.k-1)
         model = Unet(dim=128, channels=ch).to(args.device)
-        print(f'Number of parameters: {sum(p.numel() for p in model.parameters())}')
     elif args.dataset == 'text8':
         model = Transformer(emb_dim=256, vocab_size=27).to(args.device)
-        print(f'Number of parameters: {sum(p.numel() for p in model.parameters())}')
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+    print(f'Number of parameters: {sum(p.numel() for p in model.parameters())}')
 
     # check for pretrained model
     model_path = save_path(args, f'model.pt')
