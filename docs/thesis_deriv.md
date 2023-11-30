@@ -4,6 +4,8 @@ $$
     \newcommand{\w}{\mathbf{w}}
     \newcommand{\f}{\mathbf{f}}
     \newcommand{\G}{\mathbf{G}}
+    \newcommand{\a}{\mathbf{a}}
+    \newcommand{\b}{\mathbf{b}}
     \newcommand{\d}{\mathrm{d}}
     \newcommand{\1}{\mathbf{1}}
     \newcommand{\half}{\frac{1}{2}}
@@ -178,13 +180,16 @@ $$
     + \G_t(\x) \ \d\w
 $$
 
-where (insert definition of matrix divergence) we are able to use the fact that $\G_t(\x)^\top = \G_t(\x)$. First, we will simplify the divergence term. To do this, we will begin with  the following:
+where (insert definition of matrix divergence) we are able to use the fact that $\G_t(\x)^\top = \G_t(\x)$. We will also drop the dependence on $t$ for visual clarity. 
+
+## Diffusion Matrix Divergence Term
+First, we will simplify the divergence term. To do this, we will begin with  the following:
 
 
-$$\begin{aligned}
+$$
     \nabla_\x \cdot [\G_t(\x) \G_t(\x)^\top]_i
-    &= \sum_j \frac{\partial}{\partial \x_j} [\G_t(\x) \G_t(\x)^\top]_{i,j} \\
-\end{aligned}$$
+    = \sum_j \frac{\partial}{\partial \x_j} [\G_t(\x) \G_t(\x)^\top]_{i,j} \\
+$$
 
 where we will again split the summation into two cases, when $i=j$ and when $i\neq j$. We begin with the case when $i=j$, where the diffusion matrix is first expanded:
 
@@ -192,34 +197,142 @@ $$\begin{aligned}
     \G(\x)^2_{i,i}
     &= \sum_k \G(\x)_{i,k} \G(\x)_{k,i} \\
     &= \G_{i,i}^2 + \sum_{k\neq i} \G_{i,k} \G_{k,i} \\
-    &= \x_i^2(1-\x_i)^2 + \x_i^2 \sum_{k\neq i} \x_k^2 \\
-    &= \x_i^2 \left[ (1-\x_i)^2 + \sum_{k\neq i} \x_k^2 \right] \\
+    &= \beta\x_i^2(1-\x_i)^2 + \beta(t)\x_i^2 \sum_{k\neq i} \x_k^2 \\
+    &= \beta\x_i^2 \left[ (1-\x_i)^2 + \sum_{k\neq i} \x_k^2 \right] \\
 \end{aligned}$$
 
 and then the derivative computed:
 
 $$\begin{aligned}
     \frac{\partial}{\partial \x_i} \G(\x)^2_{i,i}
-    &= \frac{\partial}{\partial \x_i} \x_i^2 \left[ (1-\x_i)^2 + \sum_{k\neq i} \x_k^2 \right] \\
-    &= 2\x_i \left[ (1-\x_i)^2 + \sum_{k\neq i} \x_k^2 \right] - 2\x_i^2 (1-\x_i) \\
-    &= 2\x_i \left[ (1 - \x_i) (1 - 2\x_i) + \sum_{k \neq i} x_k^2 \right] \\
+    &= \beta \frac{\partial}{\partial \x_i} \x_i^2 \left[ (1-\x_i)^2 + \sum_{k\neq i} \x_k^2 \right] \\
+    &= 2 \beta \x_i \left[ (1-\x_i)^2 + \sum_{k\neq i} \x_k^2 \right] - 2 \beta \x_i^2 (1-\x_i) \\
+    &= 2 \beta \x_i \left[ (1 - \x_i) (1 - 2\x_i) + \sum_{k \neq i} x_k^2 \right] \\
 \end{aligned}$$
 
 Next, the case when $i\neq j$. Again, we begin by expanding the diffusion matrix:
 
 $$\begin{aligned}
     \G(\x)^2_{i,j}
-    &= \G_{i,i}\G_{i,j} + \G_{i,j}\G_{j,j} + \sum_{k\neq i,j} \G_{i,k} \G_{k,i} \\
-    &= -\x_i\x_j \left[
-        \x_i(1-\x_i) + \x_j(1-\x_j) + \sum_{k\neq i,j} \x^2_k
+    &= \G_{i,i}\G_{i,j} + \G_{i,j}\G_{j,j} + \sum_{k\neq i,j} \G_{i,k} \G_{k,j} \\
+    &= \beta \left[ 
+        -\x_i^2\x_j(1-\x_i) - \x_j^2\x_i(1-\x_j) + \x_i\x_j \sum_{k\neq i,j} \x_k^2
+    \right] \\
+    &= -\beta \x_i\x_j \left[
+        \x_i(1-\x_i) + \x_j(1-\x_j) - \sum_{k\neq i,j} \x_k^2
+    \right] \\
+\end{aligned}$$
+
+and then the sum of derivative terms:
+
+$$
+    \sum_{j \neq i}\frac{\partial}{\partial \x_j} \G(\x)^2_{i,j}
+    = \beta \sum_{j \neq i} \frac{\partial}{\partial \x_j} -\x_i\x_j \left[
+        \underbrace{\x_i(1-\x_i) + \x_j(1-\x_j) - \sum_{k\neq i,j} \x^2_k}_{\a(\x)}
+    \right] \\
+$$
+
+we can approach this by using the product rule. First we will compute the derivative of $\a(\x)$:
+
+$$\begin{aligned}
+    \frac{\partial}{\partial \x_j} \a(\x)
+    &= \frac{\partial}{\partial \x_j} \left[
+        \x_i(1-\x_i) + \x_j(1-\x_j) - \sum_{k\neq i,j} \x^2_k
+    \right] \\
+    &= (1-2\x_j) \\
+\end{aligned}$$
+
+and then the derivative of the product:
+
+$$\begin{aligned}
+    \sum_{j \neq i}\frac{\partial}{\partial \x_j} \G(\x)^2_{i,j}
+    &= \beta \sum_{j \neq i} \frac{\partial}{\partial \x_j} -\x_i\x_j \a(\x) \\
+    &= \beta \sum_{j \neq i} [ -\x_i\a(\x) - \x_i\x_j (1-2\x_j) ] \\
+    &= -\beta \x_i \sum_{j \neq i} \left[
+        \x_i(1-\x_i) + \x_j(1-\x_j) + \x_j(1 - 2\x_j) - \sum_{k\neq i,j} \x^2_k
+    \right] \\
+    &= -(d-2)\beta\x_i^2 (1-\x_i) - \beta\x_i \sum_{j \neq i} \left[
+        \x_j(1-\x_j) + \x_j(1 - 2\x_j) - \sum_{k\neq i,j} \x^2_k
+    \right] \\
+    &= -(d-2)\beta\x_i^2 (1-\x_i) - \beta\x_i \sum_{j \neq i} \left[
+        \x_j(2 - 3\x_j) - \sum_{k\neq i,j} \x^2_k
+    \right] \\
+\end{aligned}$$
+
+Now we can combine the two cases together to get the full divergence term:
+
+$$\begin{aligned}
+    \nabla_\x \cdot [\G_t(\x) \G_t(\x)^\top]_i
+    &= \sum_j \frac{\partial}{\partial \x_j} [\G_t(\x) \G_t(\x)^\top]_{i,j} \\
+    &= \underbrace{2 \beta \x_i \left[ (1 - \x_i) (1 - 2\x_i) + \sum_{k \neq i} x_k^2 \right]}_{\b_1(\x)_i}
+    - \underbrace{(d-2)\beta\x_i^2 (1-\x_i)}_{\b_2(\x)_i}
+    - \underbrace{\beta\x_i \sum_{j \neq i} \left[
+        \x_j(2 - 3\x_j) - \sum_{k\neq i,j} \x^2_k
+    \right]}_{\b_3(\x)_i} \\
+\end{aligned}$$
+
+To complete this section, we would like to vectorize the equation that we have just derived. We will work on each part of the equation separately. First, we will consider the term $\b_1(\x)_i$:
+
+$$\begin{aligned}
+    \b_1(\x)_i
+    &= 2 \beta \x_i \left[ (1 - \x_i) (1 - 2\x_i) + \sum_{k \neq i} x_k^2 \right] \\
+    &= 2 \beta \x_i \left[
+        1 - 3\x_i + 2\x_i^2 - \x_i^2 + \sum_{k} x_k^2
+    \right] \\
+    \b_1(\x)
+    &= 2 \beta \x [\x^2 - 3\x + (1 + \|x\|_2^2)\1] \\
+\end{aligned}$$
+
+The next term can be vectorized as:
+
+$$\begin{aligned}
+    \b_2(\x)_i &= (d-2)\beta\x_i^2 (1-\x_i) \\
+    \b_2(\x) &= (d-2)\beta\x^2 (\1-\x) \\
+\end{aligned}$$
+
+and the final term as:
+
+$$\begin{aligned}
+    \b_3(\x)_i
+    &= \beta\x_i \sum_{j \neq i} \left[
+        \x_j(2 - 3\x_j) - \sum_{k\neq i,j} \x^2_k
+    \right] \\
+   &= \beta\x_i \sum_{j \neq i} [ \x_j(2 - 3\x_j) + \x_i^2 + \x_j^2 - \|\x\|_2^2 ] \\
+   &= (d-2)\beta\x_i(\x_i^2 - \|\x\|_2^2) 
+   + \beta\x_i \sum_{j \neq i} [ \x_j(2 - 3\x_j) - \x_j^2 ] \\
+   &= (d-2)\beta\x_i(\x_i^2 - \|\x\|_2^2) 
+   + \beta\x_i(2-3\x_i) \left[ \sum_{j \neq i} \x_j \right]
+   + \beta\x_i \left[ \sum_{j \neq i} \x_j^2 \right] \\
+   &= (d-2)\beta\x_i(\x_i^2 - \|\x\|_2^2)
+   + \beta\x_i(2-3\x_i) ( \|\x\|_1 - \x_i )
+   + \beta\x_i (\|\x\|_2^2 - \x_i) \\
+   &= (d-2)\beta\x_i(\x_i^2 - \|\x\|_2^2)
+   + \beta\x_i ( 2\|\x\|_1 - 2\x_i - 3\|\x\|_1\x_i + 3\x_i^2 + \|\x\|_2^2 - \x_i ) \\
+    &= (d-2)\beta\x_i(\x_i^2 - \|\x\|_2^2)
+    + \beta\x_i ( 3\x_i^2 - 3(\|\x\|_1 + 1)\x_i + 2\|\x\|_1 + \|\x\|_2^2 ) \\
+    \b_3(\x)
+    &= (d-2)\beta\x(\x^2 - \|\x\|_2^2\1)
+    + \beta\x [ 3\x^2 - 3(\|\x\|_1 + 1)\x + (2\|\x\|_1 + \|\x\|_2^2)\1 ] \\
+\end{aligned}$$
+
+Finally, we can combine these terms together to get the full divergence term:
+
+$$\begin{aligned}
+    \nabla_\x \cdot [\G_t(\x) \G_t(\x)^\top]
+    &= \beta\x \left[
+        (2\x^2 - 6\x + 2\|\x\|_2^2)\1
+        - (d-2)\x(\1 - \x)
+        - (d-2)(\x^2 - \|\x\|_2^2\1)
+        - (3\x^2 - 3(\|\x\|_1 + 1)\x + (2\|\x\|_1 + \|\x\|_2^2)\1)
+    \right] \\
+    &= \beta\x \left[
+        (2 -2(d-2) - 3)\x^2 - (6 +(d-2) + 3(\|\x\|_1 - 1))\x + (2\|\x\|_2^2 + (d-2)\|\x\|_2^2 - 2\|\x\|_1 - \|\x\|_2^2) \1
+    \right] \\
+    &= \beta\x \left[
+        (3-2d)\x^2 - (3\|\x\|_1 + d + 1)\x + ((d-1)\|\x\|_2^2 - 2\|\x\|_1) \1
     \right]
 \end{aligned}$$
 
-and then the derivative:
+## Score Derivation
 
-$$\begin{aligned}
-    \frac{\partial}{\partial \x_i} \G(\x)^2_{i,j}
-    &= \frac{\partial}{\partial \x_i} -\x_i\x_j \left[
-        \x_i(1-\x_i) + \x_j(1-\x_j) + \sum_{k\neq i,j} \x^2_k
-    \right] \\
-\end{aligned}$$
+The final term that we need to derive is the score term. We will begin by writing out the full equation for the score:
