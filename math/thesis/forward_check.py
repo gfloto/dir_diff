@@ -21,7 +21,7 @@ def f(x, t):
     g = m - m.sum(dim=1, keepdim=True) * x
     f = torch.einsum('b i j ..., b j ... -> b i ...', J(x, t), sig_inv(x))
 
-    return -0.5*beta(t)*f + 0.5*g
+    return 0.5*beta(t)* (g - f)
 
 # diffusion term for S process
 def J(x, t):
@@ -64,7 +64,7 @@ which are checked to be equivalent
 if __name__ == '__main__':
     # distribution parameters
     batch_size = 128
-    d = 4
+    d = 32
     h = 1
     w = 1
 
@@ -91,7 +91,6 @@ if __name__ == '__main__':
         s_mean = x_inv.mean(dim=(0,2,3)); s_std = x_inv.std(dim=(0,2,3))
 
         if i % 100 == 0:
-            print(r_mean, s_mean)
-            print(r_std, s_std)
-            print(x.sum(dim=1)[:5, 0, 0])
+            print( (r_mean - s_mean).abs() )
+            print( (r_std - s_std).abs() )
             print()
