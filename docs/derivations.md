@@ -1,153 +1,335 @@
-# Score Matching on the Probability Simplex
-To perform score matching on the probability simplex we need the gradient of the log-logit Gaussian distribution
-
-$$ p(x) = \frac{1}{\sqrt{2\pi v}} \frac{1}{x(1-x)} \textrm{exp }\left(-\frac{(\sigma^{-1}(x) - \mu)^2}{2v} \right)$$
-
-where $\sigma^{-1} = \textrm{log }\left( \frac{x}{1-x} \right)$
-
-## Extension to larger Domains
-We will find it useful to slightly generalize this to be a distribution over any simplex of length $a$. For now, we will work in the 1D case.
-
-Previously, we used $\sigma (x) = \frac{1}{1+e^{-x}}$ to map points from $\mathbb{R}$ to $(0,1)$. We can use $\sigma_a(x) = \frac{a}{1+e^{-x}}$ where points are mapped from $\mathbb{R}$ to $(0,a)$. To get the corresponding probability distribution, we use the change of variables formula
-
-$$p_a(x) = p(\sigma_a^{-1}(x)) \frac{\partial}{\partial x} \sigma_a^{-1}(x)$$
-
-where is this case, $p(x)$ is the standard Gaussian. Note that $\sigma_a^{-1}(x) = \textrm{log }\left[\frac{x}{a-x}\right]$ We just need to compute 
-
 $$
-\begin{aligned}
-    \frac{\partial}{\partial x} \sigma_a^{-1}(x) &= \frac{\partial}{\partial x} \textrm{log }\left[\frac{x}{a-x}\right] \\
-    &= \frac{a}{x(a-x)}
-\end{aligned}
+    \newcommand{\x}{\mathbf{x}}
+    \newcommand{\z}{\mathbf{z}}
+    \newcommand{\w}{\mathbf{w}}
+    \newcommand{\f}{\mathbf{f}}
+    \newcommand{\G}{\mathbf{G}}
+    \newcommand{\a}{\mathbf{a}}
+    \newcommand{\b}{\mathbf{b}}
+    \newcommand{\d}{\mathrm{d}}
+    \newcommand{\1}{\mathbf{1}}
+    \newcommand{\half}{\frac{1}{2}}
 $$
 
-meaning that we can write a slightly more general logit-normal distribution as:
 
-$$ p_a(x) = \frac{1}{\sqrt{2\pi v}} \frac{a}{x(a-x)} \textrm{exp }\left(-\frac{(\sigma_a^{-1}(x) - \mu)^2}{2v} \right)$$
+# Forward Process
 
-
-## Score derivation in 1D
-
-We are interested in:  
-$\nabla_x \textrm{log }p(x)$  
-or for the time being:  
-$\frac{\partial}{\partial x} \textrm{log }p(x)$  
-
-After working in 1D, we will then show the general case.  
-
-First we deal with the log prob:  
+## Pushing Gaussian Diffusion on the Probability Simplex
+We would like to define a diffusion process on the unit simplex. Also known as the probability simplex, this is the set of points that sum to 1 and are positive: 
 
 $$
-\begin{aligned}
-    \frac{\partial}{\partial x} \textrm{log }p_a(x) &= \textrm{log }\left[ \frac{1}{\sqrt{2\pi v}} \frac{a}{x(a-x)} \textrm{exp }\left(-\frac{(\sigma_a^{-1}(x) - \mu)^2}{2v} \right) \right]\\
-    &= C + \textrm{log }\left[ \frac{a}{x(a-x)} \right] - \frac{(\sigma_a^{-1}(x) - \mu)^2}{2v}
-\end{aligned}
+    \mathbb{S}^d = \left\{ \x \in \mathbb{R}^d \ \middle | \ \sum_{k=1}^d x_k = 1, \ x_k \geq 0 \right\}.
 $$
 
-where $C = \textrm{log }[\frac{1}{\sqrt{2\pi v}}]$  
-
-Next, we can then differentiate each of the components seperately
-
-The first can be solved as
-$$
-\begin{aligned}
-    \frac{\partial}{\partial x} \textrm{log }\left[ \frac{a}{x(a-x)} \right] &= -\frac{\partial}{\partial x} \textrm{log } [x] -\frac{\partial}{\partial x}\textrm{log }[a-x] \\
-    &= -\frac{1}{x} +\frac{1}{a-x}
-\end{aligned}
-$$
-
-and the second can be solved as
+To define a diffusion process on the simplex, we will use the commonly used Gaussian diffusion and push it forward to the simplex $\mathbb{S}^d$ Typically, diffusion is defined as the following OU process on $\mathbb{R}^d$:
 
 $$
-\begin{aligned}
-    \frac{\partial}{\partial x} -\frac{(\sigma_a^{-1}(x) - \mu)^2}{2v} &= -\frac{1}{2v}\frac{\partial}{\partial x} \left(\sigma_a^{-1}(x) - \mu\right)^2 \\
-    &= -\frac{\sigma_a^{-1}(x) - \mu}{v} \frac{\partial}{\partial x} \left( \textrm{log } \left[ \frac{x}{a-x} \right] - \mu \right) \\
-    &= -\frac{\sigma_a^{-1}(x) - \mu}{v} \frac{a}{x(a-x)} \\
-    &= -\frac{a\sigma_a^{-1}(x) - a\mu}{vx(a-x)}
-\end{aligned}
+    \d\z = -\frac{1}{2}\beta(t) \z \ \d t + \sqrt{\beta(t)} \ \d\w
 $$
 
-Putting it all together, we get:
+where the function $\beta(t)$ is a user-selection function that controls the rate that noise is added to the data sample, and $\w$ is a standard Brownian motion. We would like to push the process forward onto the unit simplex in the following manner: 
 
 $$
-\begin{aligned}
-    \frac{\partial}{\partial x} \textrm{log }p_a(x) &= \frac{1}{a-x} -\frac{a}{x} -\frac{a\sigma_a^{-1}(x) - a\mu}{vx(a-x)} \\
-    &= -\frac{a\sigma_a^{-1}(x) -2vx - a\mu + av}{vx(a-x)} \\
-    &= \frac{2vx + a\mu -a\sigma_a^{-1}(x) -av}{vx(a-x)} \\
-\end{aligned}
+    \d\x := \sigma(\z).
 $$
 
-# General Case
-The general logit-Guassian distribution can be written as:  
-$$ p(x) = \frac{1}{Z} \frac{1}{\prod^d_{i=1} x_i} \textrm{exp }\left(-\frac{\Vert\textrm{log }\left[\frac{\bar{x}_d}{x_d} \right] - \mu\Vert_2^2}{2v} \right)$$
-
-where $x\in\mathcal{S}^d$ and $\bar{x}_d = [x_1,\dots,x_{d-1}]$.  
-We assume that the Gaussian has covariance $\Sigma = \sqrt{v}I$
-
-To bring $x$ from the simplex back to $\mathbb{R}^{d-1}$ we can use:  
-$$y_i = \textrm{log }\left[\frac{x_i}{x_d}\right], i\in \{1,\dots,d-1\}$$
-
-The inverse transformation of this is:  
-$$x_i = \frac{e^{y_i}}{1+\sum_{k=1}^{d-1}e^{y_k}}, i\in \{1,\dots,d-1\}$$
-$$x_d = \frac{1}{1+\sum_{k=1}^{d-1}e^{y_k}} = 1 - \sum_{i=1}^{d-1}x_i$$
-
-## Extension to Larger Domain
-Yet again, we are interested in extending this definition to work for large domains.
-
-First we must find the function to map from $\mathbb{R}^d$ to $\mathcal{S}^d_a$, which is the simplex of length $a$. To begin, we define
+At this point, it is worth noting that $\mathbb{S}^d$ is a $d-1$ dimensional subset of $\mathbb{R}^d$, given that the final component of vectors on the simplex can be written as $\x_d = 1 - \sum_{k=1}^{d-1} \x_k$. We can then consider the simplex as being fully determined by the set of points that are positive and sum to $\textit{less than or equal}$ to 1: 
 
 $$
-\begin{aligned}
-    x_i &= \sigma_a(y_i) = a\sigma(y_i), i\in \{1,\dots,d-1\}\\ 
-    x_d &= a - \sum_{i=1}^{d-1}x_i 
-\end{aligned}
+    \left\{\x \in \mathbb{R}^{d-1} \ \middle | \ \sum_{k=1}^{d-1} \x_k \leq 1, \ x_k \geq 0 \right\}.
 $$
 
-where $\sigma$ is the previous tranformation from $\mathbb{R}^d$ to $\mathcal{S}^d_a$. The inverse can easily be seen to be the same as the previous example, meaning that:
-
-$$\sigma^{-1}_a(\mathbf{x}) = \sigma^{-1}(\mathbf{x})$$
-
-Working in more dimensions, the change of variables formula is:
-
-$$p_a(\mathbf{x}) = p(\sigma_a^{-1}(\mathbf{x})) \bigg\vert \textrm{det }\frac{\partial}{\partial \mathbf{x}} \sigma_a^{-1}(\mathbf{x}) \bigg\vert$$
-
-Thus, our next step is to find this log det term. We shall do so by first getting the Jacobian matrix into a convenient form.
+Due to this property, we would like $\sigma(\z)$ to map vectors in $\mathbb{R}^{d-1}$ to the first $d-1$ dimensions of the simplex, and the final component will be fully determined as $1 - \sum_{k=1}^{d-1} \sigma_k(\z)$. To achieve this, we can use $\sigma(\z) : \mathbb{R}^{d-1} \rightarrow \mathbb{S}^d$ defined as:
 
 $$
-\begin{aligned}
-    \frac{\partial}{\partial x_j} \sigma_a^{-1}(x)_i &= \frac{\partial}{\partial x_j} \textrm{log }\left[\frac{x_i}{x_d}\right] \\
-    &= \frac{\partial}{\partial x_j} \textrm{log }[x_i] - \frac{\partial}{\partial x_j} \textrm{log }\left[a - \sum_{i=1}^{d-1}x_i \right] \\
-    &= \delta_{ij}\frac{1}{x_i} - \frac{\partial}{\partial u} \textrm{log }[u] \frac{\partial}{\partial x_j}u, u =  a - \sum_{i=1}^{d-1}x_i\\
-    &= \delta_{ij}\frac{1}{x_i} + \frac{1}{x_d}\\
-\end{aligned}
+    \sigma(\z) = \frac{e^{\z}}{1 + \sum_{k=1}^{d-1} e^{\z_k}}.
 $$
 
-Now that we have the Jacobian, we can calculate the determinant by using the fact that a diagonal matrix $D$ plus a constant matrix $C$ has the following determinant:
-
-$$\textrm{det }(D+C) = \left(1+c\sum_{i=1}^{n}d_i^{-1}\right)\prod_{i=1}^n d_i$$
-
-In our case we have the following:
+We will use the convention where only the first $(d-1)$ components of $\z$ are written, with the understanding that the last component it always fully determined. It will be useful to have the inverse of this function as well, which is defined as:
 
 $$
-\begin{aligned}
-    \bigg\vert \textrm{det }\frac{\partial}{\partial \mathbf{x}} \sigma_a^{-1}(\mathbf{x}) \bigg\vert &= \left(1+\frac{1}{x_d}\sum_{i=1}^{d-1}x_i\right)\prod_{i=1}^{d-1}\frac{1}{x_i} \\
-    &= \left(1+\frac{1}{x_d}(a-x_d)\right)\prod_{i=1}^{d-1}\frac{1}{x_i} \\
-    &= \prod_{i=1}^{d}\frac{a}{x_i} \\
-\end{aligned}
+    \sigma^{-1}(\x) = \log\left( \frac{\x}{1 - \|\x\|_1} \right).
 $$
 
-We now have all the ingredients to make our slightly more general logit-Gaussian distribution:
+## Deriving the SDE with Ito's Lemma
+As described in some other section, we would like our SDE to be in the following form to be able to use the score matching method:
 
-$$p_a(x) = \frac{1}{(2\pi)^{(d-1)/2}} \frac{a}{\prod_{i-1}^{d}x_i} \textrm{exp }\left(-\frac{1}{2v}\bigg\Vert\textrm{log }\left[\frac{\bar{x}_d}{x_d} \right] - \mu \bigg\Vert_2^2 \right)$$
+$$
+    \d\x = \f_t(\x) \ \d t + \G_t(\x) \ \d\w.
+$$
 
----
+To derive this form, we will use Ito's Lemma to find the SDE for $\x$:
 
-## Derivation of Score
+$$
+    \d\x_i = \sigma_i(\z) = \left\{
+        -\half\beta(t) (\nabla_\z \sigma_i(\z))^\top \z
+        + \half\beta(t) \ \mathrm{Tr}\left[ H_z \sigma_i(\z) \right]
+    \right\} \ \d t
+    + \sqrt{\beta(t)} (\nabla_\z \sigma_i(\z))^\top \ \d\w
+$$
 
-Overall, we want to calculate:  
-$\nabla_x\textrm{log }p_a(x)$  
+where $H_z$ is the Hessian of $\sigma(\z)_i$ with respect to $\z$. To simplify this equation, we will first work with the gradient of the i-th component of $\sigma(\z)$ and then the Hessian.
 
-Following the same process as the 1D case:  
+### Gradient of $\sigma_i(\z)$ leading to Diffusion Matrix Term
+
+$$\begin{aligned}
+    \nabla_\z \sigma_i(\z) &= \nabla_\z \frac{e^{\z_i}}{1 + \sum_{k=1}^{d-1} e^{\z_k}} \\ 
+    (\nabla_\z \sigma_i(\z))_j &= \frac{\partial}{\partial \z_j} \frac{e^{\z_i}}{1 + \sum_{k=1}^{d-1} e^{\z_k}} \\
+\end{aligned}$$
+
+There are two different cases to consider, when $j=i$ and when $j\neq i$. We consider the first of these below. For convenience, we will use $\alpha(\z) = 1 + \sum_{k=1}^{d-1}e^{\z_k}$.
+
+$$\begin{aligned}
+    (\nabla_\z \sigma_i(\z))_i &= \frac{\partial}{\partial \z_i} \frac{e^{\z_i}}{\alpha(\z)} \\
+    &= \alpha(\z)^{-2} \left[ \alpha(\z) \frac{\partial}{\partial \z_i} e^{\z_i} - e^{\z_i} \frac{\partial}{\partial \z_i} \alpha(\z) \right] \\
+    &= \alpha(\z)^{-2} \left[ e^{\z_i} \alpha(\z) - e^{2\z_i} \right] \\
+    &= e^{\z_i} \alpha(\z)^{-1} \left[ \alpha(\z) - e^{\z_i} \right] \\
+    &= \sigma_i(\z) \left[ 1 - \sigma_i(\z) \right] \\
+    &= \x_i (1 - \x_i) \\
+\end{aligned}$$
+
+Next, the case when $j\neq i$:
+
+$$\begin{aligned}
+    (\nabla_\z \sigma_i(\z))_j
+    &= \frac{\partial}{\partial \z_j} \frac{e^{\z_i}}{\alpha(\z)} \\
+    &= -\alpha(\z)^{-2} \frac{\partial}{\partial \z_j} \alpha(\z) e^{\z_i} \\
+    &= -\alpha(\z)^{-2} e^{\z_i} e^{\z_j} \\
+    &= -\sigma_i(\z) \sigma_j(\z) \\
+    &= -\x_i \x_j \\
+\end{aligned}$$
+
+At this point, we can notice that $G_t(\x)_i = \sqrt{\beta(t)} \nabla_\z \sigma_i(\z)^\top$ and can write out the full diffusion matrix $G_t(\x)$ as:
+
+$$\begin{aligned}
+    G_t(\x) 
+    &= \sqrt{\beta(t)} J_\z \sigma(\z) \\
+    (J_\z \sigma(\z))_{i,j}
+    &= \begin{cases}
+        \x_i (1 - \x_i) & \textrm{if } \ \ i=j \\
+        -\x_i \x_j & \textrm{if } \ \ i\neq j \\
+    \end{cases} \\
+\end{aligned}$$
+
+
+### Hessian of $\sigma_i(\z)$ leading to Drift Term
+
+Next we deal with the trace Hessian term:
+
+$$\textrm{Tr}[H_{X}\sigma_i(\mathbf{\z})] = \sum_{j=1}^{d-1}\frac{\partial^2}{\partial \z_j^2} \sigma_i(\mathbf{X})_j$$
+
+which again can be split into two cases. First we deal with the case when $j=i$
+
+$$\begin{aligned}
+    \frac{\partial^2}{\partial \z_i^2} \sigma_i(\z)
+    &= \frac{\partial}{\partial \z_i} \sigma_i(\z)(1-\sigma_i(\z)) \\
+    &= \sigma_i(\z)(1-\sigma_i(\z))(1-2\sigma_i(\z)) \\
+    &= \x_i(1-\x_i)(1-2\x_i)
+\end{aligned}$$
+
+Then the case where $j\neq i$
+
+$$\begin{aligned}
+    \frac{\partial^2}{\partial \z_j^2} \sigma_i(\z)
+    &= -\frac{\partial}{\partial \z_j} \sigma_i(\z)\sigma_j(\z)\\
+    &= -\sigma_i(\z)\sigma_j(\z)(1 - 2\sigma_j(\z)) \\
+    &= -\x_i\x_j(1-2\x_j)
+\end{aligned}$$
+
+We can now combine these terms together and simplify:
+
+$$\begin{aligned}
+    \mathrm{Tr}[H_{X}\sigma_i(\mathbf{\z})]
+    &= \x_i(1 - \x_i)(1 - 2\x_i) + \sum_{j\neq i} -\x_i\x_j(1-2\x_j) \\
+    &= \x_i(1 - \x_i)(1 - 2\x_i) - \x_i \left[
+        -\x_i(1-2\x_i) + \sum_j \x_j(1-2\x_j)
+    \right] \\
+    \mathrm{Tr}[H_{X}\sigma(\mathbf{\z})]
+    &= \x(\1-\x)(\1-2\x) + \x^2(\1-2\x) - \|\x(\1-2\x)\|_1 \ \x \\
+    &= \x(\1-2\x) - \|\x(\1-2\x)\|_1 \ \x \\
+\end{aligned}$$
+
+Now we could like to simplify terms to get the drift term $\f_t(\x)$. We must work with the following:
+
+$$\begin{aligned}
+    \f_t(\x)_i
+    &= -\half\beta(t) (\nabla_\z \sigma_i(\z))^\top \z
+        + \half\beta(t) \ \mathrm{Tr}\left[ H_z \sigma_i(\z) \right] \\
+    &= \half \beta(t) \left[
+        \x - 2\x^2 + \|\x(1-2\x)\|_1 \ \x
+        - \frac{1}{\sqrt{\beta(t)}} \G(\x) \sigma(\x)^{-1}
+    \right]
+\end{aligned}$$
+
+# Reverse Process
+The reverse diffusion process is: 
+
+$$
+    \d\x = \left\{
+        \f_t(\x) 
+        - \nabla_\x \cdot [\G_t(\x) \G_t(\x)^\top]
+        - \G_t(\x) \G_t(\x)^\top \nabla_\x \log p_t(\x)
+    \right\} \d t \
+    + \G_t(\x) \ \d\w
+$$
+
+where (insert definition of matrix divergence) we are able to use the fact that $\G_t(\x)^\top = \G_t(\x)$. We will also drop the dependence on $t$ for visual clarity. 
+
+## Diffusion Matrix Divergence Term
+First, we will simplify the divergence term. To do this, we will begin with  the following:
+
+
+$$
+    \nabla_\x \cdot [\G_t(\x) \G_t(\x)^\top]_i
+    = \sum_j \frac{\partial}{\partial \x_j} [\G_t(\x) \G_t(\x)^\top]_{i,j} \\
+$$
+
+where we will again split the summation into two cases, when $i=j$ and when $i\neq j$. We begin with the case when $i=j$, where the diffusion matrix is first expanded:
+
+$$\begin{aligned}
+    \G(\x)^2_{i,i}
+    &= \sum_k \G(\x)_{i,k} \G(\x)_{k,i} \\
+    &= \G_{i,i}^2 + \sum_{k\neq i} \G_{i,k} \G_{k,i} \\
+    &= \beta\x_i^2(1-\x_i)^2 + \beta(t)\x_i^2 \sum_{k\neq i} \x_k^2 \\
+    &= \beta\x_i^2 \left[ (1-\x_i)^2 + \sum_{k\neq i} \x_k^2 \right] \\
+\end{aligned}$$
+
+and then the derivative computed:
+
+$$\begin{aligned}
+    \frac{\partial}{\partial \x_i} \G(\x)^2_{i,i}
+    &= \beta \frac{\partial}{\partial \x_i} \x_i^2 \left[ (1-\x_i)^2 + \sum_{k\neq i} \x_k^2 \right] \\
+    &= 2 \beta \x_i \left[ (1-\x_i)^2 + \sum_{k\neq i} \x_k^2 \right] - 2 \beta \x_i^2 (1-\x_i) \\
+    &= 2 \beta \x_i \left[ (1 - \x_i) (1 - 2\x_i) + \sum_{k \neq i} \x_k^2 \right] \\
+\end{aligned}$$
+
+Next, the case when $i\neq j$. Again, we begin by expanding the diffusion matrix:
+
+$$\begin{aligned}
+    \G(\x)^2_{i,j}
+    &= \G_{i,i}\G_{i,j} + \G_{i,j}\G_{j,j} + \sum_{k\neq i,j} \G_{i,k} \G_{k,j} \\
+    &= \beta \left[ 
+        -\x_i^2\x_j(1-\x_i) - \x_j^2\x_i(1-\x_j) + \x_i\x_j \sum_{k\neq i,j} \x_k^2
+    \right] \\
+    &= -\beta \x_i\x_j \left[
+        \x_i(1-\x_i) + \x_j(1-\x_j) - \sum_{k\neq i,j} \x_k^2
+    \right] \\
+\end{aligned}$$
+
+and then the sum of derivative terms:
+
+$$
+    \sum_{j \neq i}\frac{\partial}{\partial \x_j} \G(\x)^2_{i,j}
+    = \beta \sum_{j \neq i} \frac{\partial}{\partial \x_j} -\x_i\x_j \left[
+        \underbrace{\x_i(1-\x_i) + \x_j(1-\x_j) - \sum_{k\neq i,j} \x^2_k}_{\a(\x)}
+    \right] \\
+$$
+
+we can approach this by using the product rule. First we will compute the derivative of $\a(\x)$:
+
+$$\begin{aligned}
+    \frac{\partial}{\partial \x_j} \a(\x)
+    &= \frac{\partial}{\partial \x_j} \left[
+        \x_i(1-\x_i) + \x_j(1-\x_j) - \sum_{k\neq i,j} \x^2_k
+    \right] \\
+    &= (1-2\x_j) \\
+\end{aligned}$$
+
+and then the derivative of the product:
+
+$$\begin{aligned}
+    \sum_{j \neq i}\frac{\partial}{\partial \x_j} \G(\x)^2_{i,j}
+    &= \beta \sum_{j \neq i} \frac{\partial}{\partial \x_j} -\x_i\x_j \a(\x) \\
+    &= \beta \sum_{j \neq i} [ -\x_i\a(\x) - \x_i\x_j (1-2\x_j) ] \\
+    &= -\beta \x_i \sum_{j \neq i} \left[
+        \x_i(1-\x_i) + \x_j(1-\x_j) + \x_j(1 - 2\x_j) - \sum_{k\neq i,j} \x^2_k
+    \right] \\
+    &= -(d-2)\beta\x_i^2 (1-\x_i) - \beta\x_i \sum_{j \neq i} \left[
+        \x_j(1-\x_j) + \x_j(1 - 2\x_j) - \sum_{k\neq i,j} \x^2_k
+    \right] \\
+    &= -(d-2)\beta\x_i^2 (1-\x_i) - \beta\x_i \sum_{j \neq i} \left[
+        \x_j(2 - 3\x_j) - \sum_{k\neq i,j} \x^2_k
+    \right] \\
+\end{aligned}$$
+
+Now we can combine the two cases together to get the full divergence term:
+
+$$\begin{aligned}
+    \nabla_\x \cdot [\G_t(\x) \G_t(\x)^\top]_i
+    &= \sum_j \frac{\partial}{\partial \x_j} [\G_t(\x) \G_t(\x)^\top]_{i,j} \\
+    &= \underbrace{2 \beta \x_i \left[ (1 - \x_i) (1 - 2\x_i) + \sum_{k \neq i} \x_k^2 \right]}_{\b_1(\x)_i}
+    - \underbrace{(d-2)\beta\x_i^2 (1-\x_i)}_{\b_2(\x)_i}
+    - \underbrace{\beta\x_i \sum_{j \neq i} \left[
+        \x_j(2 - 3\x_j) - \sum_{k\neq i,j} \x^2_k
+    \right]}_{\b_3(\x)_i} \\
+\end{aligned}$$
+
+To complete this section, we would like to vectorize the equation that we have just derived. We will work on each part of the equation separately. First, we will consider the term $\b_1(\x)_i$:
+
+$$\begin{aligned}
+    \b_1(\x)_i
+    &= 2 \beta \x_i \left[ (1 - \x_i) (1 - 2\x_i) + \sum_{k \neq i} \x_k^2 \right] \\
+    &= 2 \beta \x_i \left[
+        1 - 3\x_i + 2\x_i^2 - \x_i^2 + \sum_{k} \x_k^2
+    \right] \\
+    \b_1(\x)
+    &= 2 \beta \x [\x^2 - 3\x + (1 + \|\x\|_2^2)\1] \\
+\end{aligned}$$
+
+The next term can be vectorized as:
+
+$$\begin{aligned}
+    \b_2(\x)_i &= (d-2)\beta\x_i^2 (1-\x_i) \\
+    \b_2(\x) &= (d-2)\beta\x^2 (\1-\x) \\
+\end{aligned}$$
+
+and the final term as:
+
+$$\begin{aligned}
+    \b_3(\x)_i
+    &= \beta\x_i \sum_{j \neq i} \left[
+        \x_j(2 - 3\x_j) - \sum_{k\neq i,j} \x^2_k
+    \right] \\
+   &= \beta\x_i \sum_{j \neq i} [ \x_j(2 - 3\x_j) + \x_i^2 + \x_j^2 - \|\x\|_2^2 ] \\
+   &= (d-2)\beta\x_i(\x_i^2 - \|\x\|_2^2) 
+   + \beta\x_i \sum_{j \neq i} [ \x_j(2 - 3\x_j) - \x_j^2 ] \\
+   &= (d-2)\beta\x_i(\x_i^2 - \|\x\|_2^2) 
+   + \beta\x_i(2-3\x_i) \left[ \sum_{j \neq i} \x_j \right]
+   + \beta\x_i \left[ \sum_{j \neq i} \x_j^2 \right] \\
+   &= (d-2)\beta\x_i(\x_i^2 - \|\x\|_2^2)
+   + \beta\x_i(2-3\x_i) ( \|\x\|_1 - \x_i )
+   + \beta\x_i (\|\x\|_2^2 - \x_i) \\
+   &= (d-2)\beta\x_i(\x_i^2 - \|\x\|_2^2)
+   + \beta\x_i ( 2\|\x\|_1 - 2\x_i - 3\|\x\|_1\x_i + 3\x_i^2 + \|\x\|_2^2 - \x_i ) \\
+    &= (d-2)\beta\x_i(\x_i^2 - \|\x\|_2^2)
+    + \beta\x_i ( 3\x_i^2 - 3(\|\x\|_1 + 1)\x_i + 2\|\x\|_1 + \|\x\|_2^2 ) \\
+    \b_3(\x)
+    &= (d-2)\beta\x(\x^2 - \|\x\|_2^2\1)
+    + \beta\x [ 3\x^2 - 3(\|\x\|_1 + 1)\x + (2\|\x\|_1 + \|\x\|_2^2)\1 ] \\
+\end{aligned}$$
+
+Finally, we can combine these terms together to get the full divergence term:
+
+$$\begin{aligned}
+    \nabla_\x \cdot [\G_t(\x) \G_t(\x)^\top]
+    &= \beta\x \left[
+        (2\x^2 - 6\x + 2\|\x\|_2^2)\1
+        - (d-2)\x(\1 - \x)
+        - (d-2)(\x^2 - \|\x\|_2^2\1)
+        - (3\x^2 - 3(\|\x\|_1 + 1)\x + (2\|\x\|_1 + \|\x\|_2^2)\1)
+    \right] \\
+    &= \beta\x \left[
+        (2 -2(d-2) - 3)\x^2 - (6 +(d-2) + 3(\|\x\|_1 - 1))\x + (2\|\x\|_2^2 + (d-2)\|\x\|_2^2 - 2\|\x\|_1 - \|\x\|_2^2) \1
+    \right] \\
+    &= \beta\x \left[
+        (3-2d)\x^2 - (3\|\x\|_1 + d + 1)\x + ((d-1)\|\x\|_2^2 - 2\|\x\|_1) \1
+    \right]
+\end{aligned}$$
+
+## Score Derivation
+
+The final term that we need to derive is the score term. We will begin by writing out the full equation for the score:
+
 $$\textrm{log }p_a(x) = -\textrm{log }[Z] - \textrm{log }\left[\prod_{i-1}^{d}x_i\right] -\frac{1}{2v}\bigg\Vert\textrm{log }\left[\frac{\bar{x}_d}{x_d} \right] - \mu \bigg\Vert_2^2$$ 
 
 We deal with the gradients, starting with the second term (the first one has no gradient). 
@@ -202,153 +384,11 @@ $$
 \end{aligned}
 $$
 
-# Sampling and Ito's Lemma
-
-We are working with an OU process of the following form:
-
-$$d\mathbf{X}_t = -\theta\mathbf{X}_t dt + d\mathbf{B}_t$$
-
-with a corresponding process:
-
-$$\mathbf{S}_t = \sigma^a(\mathbf{X}_t)$$
-
-To keep this section self-contained the definition of $\sigma_a$ is:
-
-$$\sigma^a_i(\mathbf{y}) = \frac{ae^{y_i}}{1+\sum_{k=1}^{d-1}e^{y_k}}, i\in \{1,\dots,d-1\}$$
-
-To sample from our model, we must write $S_t$ in a form where $S_t = f(x,t)dt + g(x,t)dB_t$. This can be done via Ito's Lemma:
-
-$$dS_i = -\theta(\nabla_X\sigma^a_i(\mathbf{X}))^\top \mathbf{X}dt + \frac{1}{2}\textrm{Tr}[H_{X}\sigma^a_i(\mathbf{X})]dt + \nabla_X\sigma^a_i(\mathbf{X})^\top d\mathbf{B}$$
-
-Where $H_X$ is the Hessian matrix and we drop the time dependence of $\mathbf{S}_t$ and $\mathbf{X}_t$ for notational simplicity. 
-
----
-
-First we deal with the gradient term of the equation. We will use $\gamma(\mathbf{X}) = 1 + \sum_{k=1}^{d-1}e^{X_k}$ to keep notation smaller.
+which can be vectorized as:
 
 $$
-\begin{aligned}
-    \nabla_X\sigma^a_i(\mathbf{X}) := \mathbf{g} &= \nabla_X\frac{ae^{X_i}}{\gamma(\mathbf{X})} \\
-    g_j &= \frac{\partial}{\partial X_{j}} \frac{ae^{X_i}}{\gamma(\mathbf{X})}
-\end{aligned}
+    \nabla_\x\textrm{log }p(\x) 
+    = \frac{\x - ||\x||_1 \1}{||\x||_1 \x} 
+    - \frac{1}{v||\x||_1} \gamma(\x)
+    -\frac{\1^\top [\gamma(\x) - \mu]}{v ||\x||_1} \1
 $$
-
-We deal with the case when when $j=i$ below
-$$
-\begin{aligned}
-    g_i &= \frac{\partial}{\partial X_{i}} \frac{ae^{X_i}}{\gamma(\mathbf{X})} \\
-    &= \gamma(\mathbf{X})^{-2}\left[\gamma(\mathbf{X})\frac{\partial}{\partial X_i} ae^{X_i} - ae^{X_i}\frac{\partial}{\partial X_i}\gamma(\mathbf{X})\right] \\ 
-    &= \gamma(\mathbf{X})^{-2}\left[ae^{X_i}\gamma(\mathbf{X}) - ae^{2X_i}\right] \\ 
-    &= a\sigma_i(\mathbf{X})\gamma(\mathbf{X})^{-1}[\gamma(\mathbf{X}) - e^{X_i}] \\
-    &= a\sigma_i(\mathbf{X})(1-\sigma_i(\mathbf{X})) \\
-\end{aligned}
-$$
-
-and the case when $j\neq i$:
-$$
-\begin{aligned}
-    g_j &= \frac{\partial}{\partial X_{j}} \frac{ae^{X_i}}{\gamma(\mathbf{X})} \\
-    &= -\frac{ae^{X_i}e^{X_j}}{\gamma(X)^2} \\
-    &= -a\sigma_i(\mathbf{X})\sigma_j(\mathbf{X}) \\
-\end{aligned}
-$$
-
----
-
-Next we deal with the trace Hessian term:
-
-$$\textrm{Tr}[H_{X}\sigma^a_i(\mathbf{X})] = \sum_{j=1}^{d-1}\frac{\partial^2}{\partial X_j^2} \sigma^a_i(\mathbf{X})$$
-
-which again can be split into two cases. First we deal with the case when $j=i$
-
-$$
-\begin{aligned}
-    \frac{\partial^2}{\partial X_i^2} \sigma^a_i(\mathbf{X}) &= a\frac{\partial}{\partial X_i} \sigma_i(\mathbf{X})(1-\sigma_i(\mathbf{X})) \\
-    &= a\sigma_i(\mathbf{X})(1-\sigma_i(\mathbf{X}))(1-2\sigma_i(\mathbf{X})) \\
-\end{aligned}
-$$
-
-Then the case where $j\neq i$
-
-$$
-\begin{aligned}
-    \frac{\partial^2}{\partial X_j^2} \sigma^a_i(\mathbf{X}) &= -a\frac{\partial}{\partial X_j} \sigma_i(\mathbf{X})\sigma_j(\mathbf{X})\\
-    &= -a^2\sigma_i(\mathbf{X})\sigma_j(\mathbf{X})(1 - 2\sigma_j(\mathbf{X}))
-\end{aligned}
-$$
-
----
-
-## Implimentation
-We are interested in simplifying the previous equations and learning $g^2(S_t) \nabla_s p(S_t)$ directly. We are interested in the following form:
-
-$$d\bm{S}_t = \bm{f}(\bm{S}_t)dt + \bm{G}(\bm{S}_t)d\bm{B}_t$$
-
-First the drift term can be simplified:
-
-$$
-\begin{aligned}
-    f_i(\bm{S})dt &= -\theta S_i\left[(1-S_i)X_i +\sum_{i\neq j}S_jX_j + \frac{1}{2}(1-S_i)(1-2S_i) + \frac{1}{2}\sum_{i \neq j} S_j(1-2S_j) \right]dt \\
-    &= -\theta S_i \left[ (1-S_i)\beta_i - \sum_{i\neq j}S_j\beta_j \right]dt
-\end{aligned}
-$$
-
-where $\beta_j = X_j+\frac{1}{2}(1-2S_j)$ and $S_d = 1 - \sum_{k=1}^{d-1}S_k$
-
-We would now like to combine $\bm{G}$ and $\nabla_s p(\bm{S}_t)$ by: $\bm{G}\bm{G}^\top \nabla_s p(\bm{S}_t)$, with the following definitions:
-
-$$ 
-\begin{aligned}
-    g_i (\bm{S})d\bm{B} &= S_i(1-S_i)dB_i - \sum_{i\neq j}S_iS_jdB_j \\
-    \bm{G} &= \textrm{diag}(g)
-\end{aligned}
-$$
-
-$$
-\begin{aligned}
-    \nabla_S p(S)_i &= \frac{v^{-1}(S_i-S_d)-S_d\gamma_i(\bm{S},\mu) - S_i\sum_{k=1}^{d-1}\gamma_k(\bm{S},\mu)}{vS_iS_d} \\
-    &= \frac{\Omega_i(\bm{S}, \mu, v)}{vS_iS_d}
-\end{aligned}
-$$
-
-We are interested is learning:
-
-$$
-\begin{aligned}
-    \bm{G}\bm{G}^\top \nabla_s p(\bm{S})_i &= \frac{S_i(1-S_i)^2}{vS_d}\Omega_i + \sum_{i\neq j}\frac{S_iS_j^2}{vS_d}\Omega_j
-\end{aligned}
-$$
-
----
-
-## Vectorized Implimentation
-
-We would like a vectorized implimentation in the following form:
-
-$$d\mathbf{S}_t = -\theta J\mathbf{X}_tdt + \frac{1}{2}hdt + J\mathbf{B}_t $$
-
-where $J_i=\nabla_X\sigma^a_i(\mathbf{X}_t)$ is the vectorized gradient (Jacobian), and $h_i =  \textrm{Tr}[H_{X}\sigma^a_i(\mathbf{X_t})]$
-
-Beginning with $J$ we have:
-
-$$
-\begin{aligned}
-    J_{ii} &= a\sigma_i(\mathbf{X})(1-\sigma_i(\mathbf{X})), i = j \\
-    J_{ij} &= -a\sigma_i(\mathbf{X})\sigma_j(\mathbf{X}), i\neq j \\
-\end{aligned}
-$$
-
-Leaving us with a vectorized version:
-
-$$ J = a\mathbf{S}_t\mathbf{1}^\top \odot \textrm{diag}_1\left([1-\mathbf{S}_t]\mathbf{1}^\top\right) \odot \textrm{diag}^1\left(\mathbf{1}^\top \mathbf{S}_t\right) $$
-
-where $\textrm{diag}_1()$ take a matrix and sets all values besides the diagonal to $1$ while keeping other elemets the same. Similarily, $\textrm{diag}^1()$ takes a matrix and sets the diagonals to $1$ and keeps everything else the same.
-
-For the Hessian term $h$ we have do the following:
-$$ h_i = a\sigma_i(\mathbf{X})(1-\sigma_i(\mathbf{X}))(1-2\sigma_i(\mathbf{X}))+\sum_{j\neq i}^{d-1}-a^2\sigma_i(\mathbf{X})\sigma_j(\mathbf{X})(1 - 2\sigma_j(\mathbf{X}))$$
-
-and can vectorize this to:
-
-$$ h = a\mathbf{S}_t(1-\mathbf{S}_t)(1-2\mathbf{S}_t) + \textrm{diag}^0(\mathbf{S}_t\mathbf{1}^\top) (\mathbf{S}_t[1 - 2\mathbf{S}_t]) $$
-
-where $\textrm{diag}^0()$ takes a matrix and sets all values in the the diagonal to $0$ while keeping other elemets the same.
