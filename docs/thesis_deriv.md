@@ -336,3 +336,66 @@ $$\begin{aligned}
 ## Score Derivation
 
 The final term that we need to derive is the score term. We will begin by writing out the full equation for the score:
+
+$$\textrm{log }p_a(x) = -\textrm{log }[Z] - \textrm{log }\left[\prod_{i-1}^{d}x_i\right] -\frac{1}{2v}\bigg\Vert\textrm{log }\left[\frac{\bar{x}_d}{x_d} \right] - \mu \bigg\Vert_2^2$$ 
+
+We deal with the gradients, starting with the second term (the first one has no gradient). 
+
+$$
+\begin{aligned}
+    g &:= -\nabla_x\textrm{log }\left[\prod_{i=1}^{d}x_i \right] \\ 
+    g_i &= -\frac{\partial}{\partial x_i}\left(\sum_{i=1}^{d-1}\textrm{log }[x_i] + \textrm{log }\left[a - \sum_{k=1}^{d-1}x_k \right]\right) \\
+    &= -\frac{1}{x_i} + \frac{1}{a - \sum_{k=1}^{d-1}x_k} \\
+    &= \frac{1}{x_d} - \frac{1}{x_i} \\
+    &= \frac{x_i - x_d}{x_ix_d} \\
+\end{aligned}
+$$
+
+Next, we deal with the exponential term:
+
+$$
+\begin{aligned}
+    h &:= -\frac{1}{2v}\nabla_x \bigg\Vert\textrm{log }\left[\frac{\bar{x}_d}{x_d} \right] - \mu \bigg\Vert_2^2 \\ 
+    h_i &= -\frac{1}{2v}\frac{\partial}{\partial x_i}\left(\sum_{k=1}^{d-1}\left(\textrm{log }\left[\frac{x_k}{x_d} \right]-\mu \right)^2 \right) \\
+    &= -\frac{1}{2v}\sum_{k=1}^{d-1}\left(\frac{\partial}{\partial u}u^2\frac{\partial}{\partial x_i}u \right), u = \textrm{log }\left[\frac{x_k}{x_d} \right]-\mu \\
+\end{aligned}
+$$
+
+We can just focus on $\beta := \frac{\partial}{\partial u}u^2\frac{\partial}{\partial x_i}u$ for now
+
+$$
+\begin{aligned}
+    \beta &:= \frac{\partial}{\partial u}u^2\frac{\partial}{\partial x_i}u \\
+    &= 2u \left(\frac{\partial}{\partial x_i}\textrm{log }[x_k] - \frac{\partial}{\partial x_i}\textrm{log} \left[a - \sum_{k=1}^{d-1}x_k \right]\right) \\
+    &= 2u \left(\delta_{ik}\frac{1}{x_i} + \frac{1}{x_d}\right) \\
+\end{aligned}
+$$
+
+Combining terms we get:
+
+$$
+\begin{aligned}
+    h_i &= -\frac{1}{v}\sum_{k=1}^{d-1}\left(\delta_{ik}\frac{1}{x_i} + \frac{1}{x_d}\right)\left(\textrm{log }\left[\frac{\bar{x}_d}{x_d} \right]-\mu\right) \\
+    &= -\frac{1}{vx_d}\sum_{k=1}^{d-1}\left(\textrm{log}\left[\frac{x_k}{x_d}\right]-\mu \right) - \frac{1}{vx_i}\left(\textrm{log}\left[\frac{x_i}{x_d}\right]-\mu \right) \\
+    &= -\frac{1}{vx_d}\sum_{k=1}^{d-1}\gamma_\mu^k(\mathbf{x}) - \frac{1}{vx_i}\gamma_\mu^i(\mathbf{x}) \\
+\end{aligned}
+$$
+
+where we write $\gamma_\mu^i(\mathbf{x}) = \textrm{log}\left[\frac{x_i}{x_d}\right]-\mu$
+
+For the final results, we must combine the $h$ and $g$ terms together to get:
+
+$$
+\begin{aligned}
+    \nabla_x\textrm{log }p_a(x)_i = -\frac{1}{vx_d}\sum_{k=1}^{d-1}\gamma_\mu^k(\mathbf{x}) - \frac{1}{vx_i}\gamma_\mu^i(\mathbf{x}) + \frac{x_i - x_d}{x_ix_d} \\
+\end{aligned}
+$$
+
+which can be vectorized as:
+
+$$
+    \nabla_\x\textrm{log }p(\x) 
+    = \frac{\x - ||\x||_1 \1}{||\x||_1 \x} 
+    - \frac{1}{v||\x||_1} \gamma(\x)
+    -\frac{\1^\top [\gamma(\x) - \mu]}{v ||\x||_1} \1
+$$

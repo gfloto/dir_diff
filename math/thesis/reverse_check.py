@@ -20,7 +20,7 @@ def f(x, t):
     g = m - m.sum(dim=1, keepdim=True) * x
     f = torch.einsum('b i j ..., b j ... -> b i ...', J(x), sig_inv(x))
 
-    return 0.5*beta(t)* (g - f)
+    return -0.5*beta(t)* (g - f)
 
 # diffusion term for S process
 def J(x):
@@ -88,18 +88,22 @@ def div_GG(x, t):
 
 # helper function
 def gamma(x, mu):
+    if x.log().isnan().any(): print('hit 1')
+    if (1 - x.sum(dim=1, keepdim=True)).log().isnan().any(): print('hit 2')
+
     return x.log() - (1 - x.sum(dim=1, keepdim=True)).log() - mu
 
 # score or grad log pdf
 def logistic_score(x, mu, v):
     g = gamma(x, mu)
+
     xd = 1 - x.sum(dim=1, keepdim=True)
 
     a1 = (x - xd) / (x * xd)
     a2 = g / x
     a3 = g.sum(dim=1, keepdim=True) / xd
 
-    return a1 - 1/v * (a2 + a3)
+    return a1 - (a2 + a3) / v
 
 # p(z_t | z_0) in R
 def p_zt_z0(z0, t, beta_min=0.1, beta_max=20):
@@ -125,17 +129,17 @@ def p_xt_x0(x0, t, beta_min=0.1, beta_max=20):
 
 # forward process differential for S
 def update_x(x, t, score, dt, eps):
-    GdB = torch.einsum('b i j ..., b j ... -> b i ...', G(x, t), eps)
+    GdB = torch.einsum('b i j ..., b j ... -> b i ...', G(x, t), eps * dt.sqrt())
     GG_score = torch.einsum('b i j ..., b j ... -> b i ...', GG(x, t), score)
 
-    x += ( f(x, t) - 0.5*div_GG(x, t) + 0.5*GG_score )*dt + GdB*dt.sqrt()
+    x -= ( f(x, t) - 0.5*div_GG(x, t) - 0.5*GG_score )*dt + GdB
     return x
 
 # forward process differential for R
 def update_z(z, t, score, dt, eps):
     a = (-0.5*beta(t)*z - beta(t)*score) * dt
     b = beta(t).sqrt()*eps*dt.sqrt()
-    z += a + b
+    z -= a + b
     return z 
 
 '''
@@ -146,21 +150,20 @@ a diffusion process is ran in R^d and in S^d
 which are checked to be equivalent
 '''
 
-#torch.set_default_dtype(torch.float64)
+torch.set_default_dtype(torch.float64)
 if __name__ == '__main__':
     device = 'cuda'
 
     # distribution parameters
     batch_size = 128
-    d = 4
+    d = 11
     h = 32
     w = 32
 
     # get initial data point
-    v1 = 1e-1; v0 = v1 / (d-1)
+    v1 = 0.1; v0 = v1 / (d-1)
     x_init = torch.zeros(1, d-1, 1, 1) + v0
     idx = torch.randint(d-1, size=(1,)).item()
-    idx = 0
     if idx < d-1: x_init[:, idx, ...] = 1-v1
     print(f'using {v0:.5f} and {1-v1:.5f} for initial data point')
 
@@ -185,13 +188,17 @@ if __name__ == '__main__':
 
         # run diffusion process in R
         zt, z_mu, z_v = p_zt_z0(z0, t)
-        z_score = (z - z_mu) / z_v
+        z_score = -(z - z_mu) / z_v
         z = update_z(z, t, z_score, dt, eps)
 
         # run diffusion process in S
         xt, x_mu, x_v = p_xt_x0(x0, t)
         x_score = logistic_score(x, x_mu, x_v)
         x = update_x(x, t, x_score, dt, eps)
+
+        # clip x
+        c = 1e-8
+        x = torch.clamp(x, c, 1 - c)
 
         # check that the diffusion process in R and S are equivalent
         z_mean = z.mean(dim=(0,2,3)); z_std = z.std(dim=(0,2,3))
@@ -204,10 +211,11 @@ if __name__ == '__main__':
         xt_inv_mean = sig_inv(xt).mean(dim=(0,2,3)); xt_inv_std = sig_inv(xt).std(dim=(0,2,3))
 
         if i % 100 == 0 or i == T-1:
-            #print(z_mean.cpu())
+            print(z_mean.cpu())
             print(zt_mean.cpu())
-            print(x_inv_mean.cpu())
-            print(x_mean.cpu())
+            print(xt_inv_mean.cpu())
+            #print(x_inv_mean.cpu())
+            #print(x_mean.cpu())
 
             #print( (z_mean - zt_mean).abs().cpu(), (z_std - zt_std).abs().cpu() )
             print()
