@@ -40,7 +40,7 @@ def diff_div(x):
 this code checks that the analytical divergence of diffusion matricies is correct 
 '''
 
-torch.set_default_dtype(torch.float64)
+#torch.set_default_dtype(torch.float64)
 if __name__ == '__main__':
     # distribution parameters
     batch_size = 1
@@ -97,8 +97,6 @@ if __name__ == '__main__':
     num_div = torch.zeros_like(num_grad[0])
     for i in range(num_grad.shape[-1]):
         num_div[:,i] = num_grad[i,:,i]
-    print(num_div.sum(dim=1))
-    print(num_div.sum(dim=0))
     print(num_div)
 
     i = 1
@@ -120,15 +118,11 @@ if __name__ == '__main__':
     print(Hoff(y, i, j))
     print()
 
-    # testing
-    print('testing')
-    print(
-        2*y* (y**2 -3*y + (1+y.square().sum()))
-    )
-
     # get analytical gradient of log pdf
-    ana_grad = diff_div(x)
-    ana_grad = ana_grad[..., i_, j_]
-    print('ana grad')
-    print(ana_grad)
+    ana_div = diff_div(x)
+    ana_div = ana_div[..., i_, j_]
+    print('ana div')
+    print(ana_div)
+    print('num div')
+    print(num_div.sum(dim=1))
     quit()
